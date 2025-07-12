@@ -24,6 +24,21 @@ var (
 	logPrefix string
 )
 
+// DefaultLogger returns the default global logger instance
+func DefaultLogger() *ZiwiLog {
+	return logger
+}
+
+// ReplaceLogger replaces the default logger with a new instance
+func ReplaceLogger(l *ZiwiLog) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if l != nil {
+		logger = l
+	}
+}
+
 // Initialize global logger instance
 func init() {
 	logger = NewLogger(NewOptions())
