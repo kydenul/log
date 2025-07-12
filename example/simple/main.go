@@ -42,7 +42,7 @@ func init() {
 
 	log.NewLogger(log.NewOptions().
 		WithPrefix(viper.GetString("log.prefix")).
-		WithDirectory("log.directory").
+		WithDirectory(viper.GetString("log.directory")).
 		WithLevel(viper.GetString("log.level")).
 		WithTimeLayout(viper.GetString("log.time-layout")).
 		WithFormat(viper.GetString("log.format")).

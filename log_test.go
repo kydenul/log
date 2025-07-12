@@ -13,7 +13,7 @@ func TestLog_Option(t *testing.T) {
 
 	opts := NewOptions()
 	opts.Compress = false
-	opts.Directory = "/Users/kyden/git-space/ziwi/logs"
+	opts.Directory = "/Users/kyden/git-space/log/logs"
 	opts.DisableCaller = false
 	opts.DisableSplitError = false
 	opts.DisableStacktrace = false
