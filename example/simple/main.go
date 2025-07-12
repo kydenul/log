@@ -40,18 +40,19 @@ func init() {
 		panic(fmt.Sprintf("Failed to read viper config file: %v", err))
 	}
 
-	log.NewLogger(log.NewOptions().
-		WithPrefix(viper.GetString("log.prefix")).
-		WithDirectory(viper.GetString("log.directory")).
-		WithLevel(viper.GetString("log.level")).
-		WithTimeLayout(viper.GetString("log.time-layout")).
-		WithFormat(viper.GetString("log.format")).
-		WithDisableCaller(viper.GetBool("log.disable-caller")).
-		WithDisableStacktrace(viper.GetBool("log.disable-stacktrace")).
-		WithDisableSplitError(viper.GetBool("log.disable-split-error")).
-		WithMaxSize(viper.GetInt("log.max-size")).
-		WithMaxBackups(viper.GetInt("log.max-backups")).
-		WithCompress(viper.GetBool("log.compress")))
+	log.ReplaceLogger(
+		log.NewLogger(log.NewOptions().
+			WithPrefix(viper.GetString("log.prefix")).
+			WithDirectory(viper.GetString("log.directory")).
+			WithLevel(viper.GetString("log.level")).
+			WithTimeLayout(viper.GetString("log.time-layout")).
+			WithFormat(viper.GetString("log.format")).
+			WithDisableCaller(viper.GetBool("log.disable-caller")).
+			WithDisableStacktrace(viper.GetBool("log.disable-stacktrace")).
+			WithDisableSplitError(viper.GetBool("log.disable-split-error")).
+			WithMaxSize(viper.GetInt("log.max-size")).
+			WithMaxBackups(viper.GetInt("log.max-backups")).
+			WithCompress(viper.GetBool("log.compress"))))
 }
 
 func main() {
