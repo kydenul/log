@@ -20,6 +20,10 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# logs
+logs/
+test_logs_atomic/
+
 # Go workspace file
 go.work
 go.work.sum

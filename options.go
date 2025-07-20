@@ -101,123 +101,92 @@ func NewOptions() *Options {
 
 func (opt *Options) WithPrefix(prefix string) *Options {
 	opt.Prefix = prefix
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
-		opt.Prefix = DefaultPrefix
-	}
-
 	return opt
 }
 
 func (opt *Options) WithDirectory(dir string) *Options {
-	opt.Directory = dir
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
+	if dir == "" {
 		opt.Directory = DefaultDirectory
+	} else {
+		opt.Directory = dir
 	}
-
 	return opt
 }
 
 func (opt *Options) WithLevel(level string) *Options {
-	opt.Level = level
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
+	if level == "" || !isValidLevelString(level) {
 		opt.Level = DefaultLevel.String()
+	} else {
+		opt.Level = level
 	}
-
 	return opt
 }
 
 func (opt *Options) WithTimeLayout(timeLayout string) *Options {
-	opt.TimeLayout = timeLayout
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
+	if timeLayout == "" {
 		opt.TimeLayout = DefaultTimeLayout
+	} else {
+		opt.TimeLayout = timeLayout
 	}
-
 	return opt
 }
 
 func (opt *Options) WithFormat(format string) *Options {
-	opt.Format = format
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
+	if format == "" || (format != "console" && format != "json") {
 		opt.Format = DefaultFormat
+	} else {
+		opt.Format = format
 	}
-
 	return opt
 }
 
 func (opt *Options) WithDisableCaller(disableCaller bool) *Options {
 	opt.DisableCaller = disableCaller
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
-		opt.DisableCaller = DefaultDisableCaller
-	}
-
 	return opt
 }
 
 func (opt *Options) WithDisableStacktrace(disableStacktrace bool) *Options {
 	opt.DisableStacktrace = disableStacktrace
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
-		opt.DisableStacktrace = DefaultDisableStacktrace
-	}
-
 	return opt
 }
 
 func (opt *Options) WithDisableSplitError(disableSplitError bool) *Options {
 	opt.DisableSplitError = disableSplitError
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
-		opt.DisableSplitError = DefaultDisableSplitError
-	}
-
 	return opt
 }
 
 func (opt *Options) WithMaxSize(maxSize int) *Options {
-	opt.MaxSize = maxSize
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
+	if maxSize <= 0 {
 		opt.MaxSize = DefaultMaxSize
+	} else {
+		opt.MaxSize = maxSize
 	}
-
 	return opt
 }
 
 func (opt *Options) WithMaxBackups(maxBackups int) *Options {
-	opt.MaxBackups = maxBackups
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
+	if maxBackups <= 0 {
 		opt.MaxBackups = DefaultMaxBackups
+	} else {
+		opt.MaxBackups = maxBackups
 	}
-
 	return opt
 }
 
 func (opt *Options) WithCompress(compress bool) *Options {
 	opt.Compress = compress
-
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("invalid options: %s. The default options will be used.", err)
-		opt.Compress = DefaultCompress
-	}
-
 	return opt
+}
+
+// isValidLevelString checks if the provided level string is valid
+func isValidLevelString(level string) bool {
+	return level == zapcore.DebugLevel.String() ||
+		level == zapcore.InfoLevel.String() ||
+		level == zapcore.WarnLevel.String() ||
+		level == zapcore.ErrorLevel.String() ||
+		level == zapcore.DPanicLevel.String() ||
+		level == zapcore.PanicLevel.String() ||
+		level == zapcore.FatalLevel.String()
 }
 
 func (opt *Options) Validate() error {
@@ -225,13 +194,7 @@ func (opt *Options) Validate() error {
 		return fmt.Errorf("invalid directory: %s, expected: not empty", opt.Directory)
 	}
 
-	if opt.Level != zapcore.DebugLevel.String() &&
-		opt.Level != zapcore.InfoLevel.String() &&
-		opt.Level != zapcore.WarnLevel.String() &&
-		opt.Level != zapcore.ErrorLevel.String() &&
-		opt.Level != zapcore.DPanicLevel.String() &&
-		opt.Level != zapcore.PanicLevel.String() &&
-		opt.Level != zapcore.FatalLevel.String() {
+	if !isValidLevelString(opt.Level) {
 		return fmt.Errorf("invalid level: %s, expected: debug, info, warn, error, dpanic, panic or fatal", opt.Level)
 	}
 
