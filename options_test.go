@@ -217,3 +217,142 @@ func Test_Options_WithCompress(t *testing.T) {
 	opt = NewOptions().WithCompress(false)
 	asrt.False(opt.Compress)
 }
+
+// Test the optimized level validation using slices.Contains
+func Test_isValidLevelString(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test valid levels
+	validLevels := []string{
+		zapcore.DebugLevel.String(),
+		zapcore.InfoLevel.String(),
+		zapcore.WarnLevel.String(),
+		zapcore.ErrorLevel.String(),
+		zapcore.DPanicLevel.String(),
+		zapcore.PanicLevel.String(),
+		zapcore.FatalLevel.String(),
+	}
+
+	for _, level := range validLevels {
+		asrt.True(isValidLevelString(level), "Level %s should be valid", level)
+	}
+
+	// Test invalid levels
+	invalidLevels := []string{
+		"",
+		"invalid",
+		"INFO", // uppercase
+		"Debug", // mixed case
+		" info", // with space
+		"info ", // with trailing space
+	}
+
+	for _, level := range invalidLevels {
+		asrt.False(isValidLevelString(level), "Level %s should be invalid", level)
+	}
+}
+
+// Test enhanced options validation
+func Test_Options_Validate_Enhanced(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test valid options
+	validOpts := NewOptions()
+	err := validOpts.Validate()
+	asrt.NoError(err)
+
+	// Test invalid directory
+	invalidDirOpts := NewOptions()
+	invalidDirOpts.Directory = ""
+	err = invalidDirOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid directory")
+
+	// Test invalid level
+	invalidLevelOpts := NewOptions()
+	invalidLevelOpts.Level = "invalid_level"
+	err = invalidLevelOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid level")
+
+	// Test invalid format
+	invalidFormatOpts := NewOptions()
+	invalidFormatOpts.Format = "xml"
+	err = invalidFormatOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid format")
+
+	// Test invalid max size
+	invalidSizeOpts := NewOptions()
+	invalidSizeOpts.MaxSize = -1
+	err = invalidSizeOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid max size")
+
+	// Test invalid max backups
+	invalidBackupsOpts := NewOptions()
+	invalidBackupsOpts.MaxBackups = 0
+	err = invalidBackupsOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid max backups")
+}
+
+// Test options method chaining with validation
+func Test_Options_ChainedValidation(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that invalid values get corrected by With* methods
+	opts := NewOptions().
+		WithLevel(""). // Should use default
+		WithFormat("xml"). // Should use default
+		WithMaxSize(-5). // Should use default
+		WithMaxBackups(0). // Should use default
+		WithDirectory("") // Should use default
+
+	// All values should be corrected to defaults
+	asrt.Equal(DefaultLevel.String(), opts.Level)
+	asrt.Equal(DefaultFormat, opts.Format)
+	asrt.Equal(DefaultMaxSize, opts.MaxSize)
+	asrt.Equal(DefaultMaxBackups, opts.MaxBackups)
+	asrt.Equal(DefaultDirectory, opts.Directory)
+
+	// Validation should pass
+	err := opts.Validate()
+	asrt.NoError(err)
+}
+
+// Test level validation consistency between functions
+func Test_LevelValidation_Consistency(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that isValidLevelString and isValidLevel are consistent
+	validLevels := []string{
+		zapcore.DebugLevel.String(),
+		zapcore.InfoLevel.String(),
+		zapcore.WarnLevel.String(),
+		zapcore.ErrorLevel.String(),
+		zapcore.DPanicLevel.String(),
+		zapcore.PanicLevel.String(),
+		zapcore.FatalLevel.String(),
+	}
+
+	for _, level := range validLevels {
+		asrt.True(isValidLevelString(level), "isValidLevelString failed for %s", level)
+		asrt.True(isValidLevel(level), "isValidLevel failed for %s", level)
+	}
+
+	invalidLevels := []string{
+		"",
+		"invalid",
+		"INFO",
+	}
+
+	for _, level := range invalidLevels {
+		asrt.False(isValidLevelString(level), "isValidLevelString should reject %s", level)
+		asrt.False(isValidLevel(level), "isValidLevel should reject %s", level)
+	}
+}

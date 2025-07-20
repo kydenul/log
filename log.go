@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -15,33 +17,41 @@ import (
 	"github.com/kydenul/log/internal"
 )
 
-var (
-	mu sync.Mutex
+const (
+	MaxRetries = 3                     // Maximum retries for file write operations
+	BriefDelay = time.Millisecond * 10 // Brief delay before retry
+)
 
-	// Global logger instance
-	logger *ZiwiLog
+var (
+	// Global logger instance using atomic.Value for lock-free access
+	defaultLogger atomic.Value // *ZiwiLog
 	// Log prefix
 	logPrefix string
+
+	// Buffer pool to reduce memory allocations
+	bufferPool = sync.Pool{
+		New: func() any {
+			return &buffer.Buffer{}
+		},
+	}
 )
 
 // DefaultLogger returns the default global logger instance
 func DefaultLogger() *ZiwiLog {
-	return logger
+	return defaultLogger.Load().(*ZiwiLog)
 }
 
 // ReplaceLogger replaces the default logger with a new instance
 func ReplaceLogger(l *ZiwiLog) {
-	mu.Lock()
-	defer mu.Unlock()
-
 	if l != nil {
-		logger = l
+		defaultLogger.Store(l)
 	}
 }
 
 // Initialize global logger instance
 func init() {
-	logger = NewLogger(NewOptions())
+	logger := NewLogger(NewOptions())
+	defaultLogger.Store(logger)
 
 	internal.SetupAutoSync(logger.Sync)
 }
@@ -54,12 +64,14 @@ var _ Logger = &ZiwiLog{}
 type ZiwiLog struct {
 	zapcore.Encoder
 
-	log      *zap.Logger
-	logDir   string // log file directory
-	file     *lumberjack.Logger
-	errFile  *lumberjack.Logger
-	currDate string // current date
-	opts     *Options
+	log       *zap.Logger
+	logDir    string // log file directory
+	file      *lumberjack.Logger
+	errFile   *lumberjack.Logger
+	currDate  string // current date
+	dateCheck int64  // atomic timestamp for date checking optimization
+	opts      *Options
+	mu        sync.RWMutex // protects file operations
 }
 
 // NewLogger creates a new logger instance. It will initialize the global logger instance with the specified options.
@@ -68,13 +80,31 @@ type ZiwiLog struct {
 //
 //   - *ZiwiLog: The new logger instance.
 func NewLogger(opts *Options) *ZiwiLog {
-	// 1. Lock to ensure thread safety
-	mu.Lock()
-	defer mu.Unlock()
-
-	// 2. If opts is nil, use default options
+	// 1. If opts is nil, use default options
 	if opts == nil {
 		opts = NewOptions()
+	}
+
+	// 2. Validate options once and fix invalid values
+	if err := opts.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid logger options: %v. Using fallback values.\n", err)
+
+		// Fix invalid options with defaults
+		if opts.Directory == "" {
+			opts.Directory = DefaultDirectory
+		}
+		if opts.Level == "" || !isValidLevel(opts.Level) {
+			opts.Level = DefaultLevel.String()
+		}
+		if opts.Format != "console" && opts.Format != "json" {
+			opts.Format = DefaultFormat
+		}
+		if opts.MaxSize <= 0 {
+			opts.MaxSize = DefaultMaxSize
+		}
+		if opts.MaxBackups <= 0 {
+			opts.MaxBackups = DefaultMaxBackups
+		}
 	}
 
 	// 3. Set log prefix
@@ -84,13 +114,17 @@ func NewLogger(opts *Options) *ZiwiLog {
 	timeLayout := DefaultTimeLayout
 	if err := internal.ValidateTimeLayout(opts.TimeLayout); err == nil {
 		timeLayout = opts.TimeLayout
+	} else {
+		fmt.Fprintf(os.Stderr,
+			"Invalid time layout '%s', using default: %s\n", opts.TimeLayout, DefaultTimeLayout)
 	}
 
 	// 5. Create our custom ZiwiLog with the base encoder
 	logger := &ZiwiLog{
-		Encoder: internal.NewBaseEncoder(opts.Format, timeLayout),
-		opts:    opts,
-		logDir:  opts.Directory,
+		Encoder:   internal.NewBaseEncoder(opts.Format, timeLayout),
+		opts:      opts,
+		logDir:    opts.Directory,
+		dateCheck: time.Now().Unix(),
 	}
 
 	// 6. Create the zap logger with our custom core, ZiwiLog encoder
@@ -114,40 +148,116 @@ func NewLogger(opts *Options) *ZiwiLog {
 	return logger
 }
 
+// isValidLevel checks if the provided level is valid
+func isValidLevel(level string) bool {
+	return slices.Contains(
+		[]string{
+			zapcore.DebugLevel.String(),
+			zapcore.InfoLevel.String(),
+			zapcore.WarnLevel.String(),
+			zapcore.ErrorLevel.String(),
+			zapcore.DPanicLevel.String(),
+			zapcore.PanicLevel.String(),
+			zapcore.FatalLevel.String(),
+		}, level)
+}
+
 // EncodeEntry encodes the entry and fields into a buffer.
 func (l *ZiwiLog) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
+	// Get buffer from base encoder
 	buf, err := l.Encoder.EncodeEntry(entry, fields)
 	if err != nil {
 		return nil, fmt.Errorf("EncodeEntry error: %w", err)
 	}
 
-	// Add log prefix
-	originalData := buf.String()
-	buf.Reset()
-	buf.AppendString(logPrefix + originalData)
+	// Optimize prefix addition using buffer operations instead of string concatenation
+	if logPrefix != "" {
+		// Get a temporary buffer from pool for prefix operation
+		tempBuf := bufferPool.Get().(*buffer.Buffer)
+		tempBuf.Reset()
+		defer bufferPool.Put(tempBuf)
 
-	// Check and update log files
-	now := time.Now().Format(time.DateOnly)
-	if err := l.setupLogFiles(now); err != nil {
-		return nil, err
+		// Write prefix + original content efficiently
+		tempBuf.AppendString(logPrefix)
+		tempBuf.Write(buf.Bytes())
+
+		// Replace original buffer content
+		buf.Reset()
+		buf.Write(tempBuf.Bytes())
 	}
 
-	// Write to main log file
+	// Optimized date checking - only check every few seconds
+	now := time.Now()
+	currentTimestamp := now.Unix()
+	if currentTimestamp-atomic.LoadInt64(&l.dateCheck) >= 3600 { // Check every hour
+		if err := l.setupLogFiles(now.Format(time.DateOnly)); err != nil {
+			return nil, err
+		}
+		atomic.StoreInt64(&l.dateCheck, currentTimestamp)
+	} else {
+		// Quick check if files exist, setup if needed
+		l.mu.RLock()
+		fileExists := l.file != nil
+		l.mu.RUnlock()
+		if !fileExists {
+			if err := l.setupLogFiles(now.Format(time.DateOnly)); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Write to main log file with error handling
 	data := buf.Bytes()
-	_, _ = l.file.Write(data)
+	if err := l.writeToFile(l.file, data); err != nil {
+		// Log write errors to stderr as fallback
+		fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
+	}
 
 	// For error level logs, also write to error log file
-	if entry.Level == zapcore.ErrorLevel && l.errFile != nil {
-		_, _ = l.errFile.Write(data)
+	if entry.Level == zapcore.ErrorLevel && !l.opts.DisableSplitError {
+		l.mu.RLock()
+		errFile := l.errFile
+		l.mu.RUnlock()
+		if errFile != nil {
+			if err := l.writeToFile(errFile, data); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write to error log file: %v\n", err)
+			}
+		}
 	}
 
 	return buf, nil
 }
 
-// setupLogFiles ensures log files are properly configured
+// writeToFile writes data to the specified file with retry logic
+func (l *ZiwiLog) writeToFile(file *lumberjack.Logger, data []byte) error {
+	if file == nil {
+		return fmt.Errorf("file is nil")
+	}
+
+	// Simple retry logic for file write
+	for retries := range MaxRetries {
+		if _, err := file.Write(data); err != nil {
+			if retries == MaxRetries-1 {
+				return fmt.Errorf("failed to write after retries: %w", err)
+			}
+
+			time.Sleep(BriefDelay) // Brief delay before retry
+			continue
+		}
+		return nil
+	}
+	return nil
+}
+
+// setupLogFiles ensures log files are properly configured with thread safety
 func (l *ZiwiLog) setupLogFiles(date string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	// If the date hasn't changed and the file exists, no need to reconfigure
-	if l.currDate == date && l.file != nil && (l.errFile != nil || !l.opts.DisableSplitError) {
+	if l.currDate == date &&
+		l.file != nil &&
+		(l.errFile != nil || l.opts.DisableSplitError) {
 		return nil
 	}
 
@@ -184,11 +294,17 @@ func (l *ZiwiLog) setupLogFiles(date string) error {
 }
 
 // Sync flushs any buffered log entries. Applications should take care to call Sync before exiting.
-func Sync() { logger.Sync() }
+func Sync() {
+	DefaultLogger().Sync()
+}
 
 // Sync flushs any buffered log entries. Applications should take care to call Sync before exiting.
 func (l *ZiwiLog) Sync() {
 	_ = l.log.Sync()
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if l.file != nil {
 		_ = l.file.Close()
 	}
@@ -197,134 +313,228 @@ func (l *ZiwiLog) Sync() {
 	}
 }
 
-func Debug(args ...any) { logger.log.Sugar().Debug(args...) }
+func Debug(args ...any) {
+	DefaultLogger().log.Sugar().Debug(args...)
+}
 
-func (l *ZiwiLog) Debug(args ...any) { l.log.Sugar().Debug(args...) }
+func (l *ZiwiLog) Debug(args ...any) {
+	l.log.Sugar().Debug(args...)
+}
 
-func Info(args ...any) { logger.log.Sugar().Info(args...) }
+func Info(args ...any) {
+	DefaultLogger().log.Sugar().Info(args...)
+}
 
-func (l *ZiwiLog) Info(args ...any) { l.log.Sugar().Info(args...) }
+func (l *ZiwiLog) Info(args ...any) {
+	l.log.Sugar().Info(args...)
+}
 
-func Warn(args ...any) { logger.log.Sugar().Warn(args...) }
+func Warn(args ...any) {
+	DefaultLogger().log.Sugar().Warn(args...)
+}
 
-func (l *ZiwiLog) Warn(args ...any) { l.log.Sugar().Warn(args...) }
+func (l *ZiwiLog) Warn(args ...any) {
+	l.log.Sugar().Warn(args...)
+}
 
-func Error(args ...any) { logger.log.Sugar().Error(args...) }
+func Error(args ...any) {
+	DefaultLogger().log.Sugar().Error(args...)
+}
 
-func (l *ZiwiLog) Error(args ...any) { l.log.Sugar().Error(args...) }
+func (l *ZiwiLog) Error(args ...any) {
+	l.log.Sugar().Error(args...)
+}
 
-func Panic(args ...any) { logger.log.Sugar().Panic(args...) }
+func Panic(args ...any) {
+	DefaultLogger().log.Sugar().Panic(args...)
+}
 
-func (l *ZiwiLog) Panic(args ...any) { l.log.Sugar().Panic(args...) }
+func (l *ZiwiLog) Panic(args ...any) {
+	l.log.Sugar().Panic(args...)
+}
 
-func Fatal(args ...any) { logger.log.Sugar().Fatal(args...) }
+func Fatal(args ...any) {
+	DefaultLogger().log.Sugar().Fatal(args...)
+}
 
-func (l *ZiwiLog) Fatal(args ...any) { l.log.Sugar().Fatal(args...) }
+func (l *ZiwiLog) Fatal(args ...any) {
+	l.log.Sugar().Fatal(args...)
+}
 
-func Debugln(args ...any) { logger.log.Sugar().Debugln(args...) }
+func Debugln(args ...any) {
+	DefaultLogger().log.Sugar().Debugln(args...)
+}
 
-func (l *ZiwiLog) Debugln(args ...any) { l.log.Sugar().Debugln(args...) }
+func (l *ZiwiLog) Debugln(args ...any) {
+	l.log.Sugar().Debugln(args...)
+}
 
-func Infoln(args ...any) { logger.log.Sugar().Infoln(args...) }
+func Infoln(args ...any) {
+	DefaultLogger().log.Sugar().Infoln(args...)
+}
 
-func (l *ZiwiLog) Infoln(args ...any) { l.log.Sugar().Infoln(args...) }
+func (l *ZiwiLog) Infoln(args ...any) {
+	l.log.Sugar().Infoln(args...)
+}
 
-func Warnln(args ...any) { logger.log.Sugar().Warnln(args...) }
+func Warnln(args ...any) {
+	DefaultLogger().log.Sugar().Warnln(args...)
+}
 
-func (l *ZiwiLog) Warnln(args ...any) { l.log.Sugar().Warnln(args...) }
+func (l *ZiwiLog) Warnln(args ...any) {
+	l.log.Sugar().Warnln(args...)
+}
 
-func Errorln(args ...any) { logger.log.Sugar().Errorln(args...) }
+func Errorln(args ...any) { DefaultLogger().log.Sugar().Errorln(args...) }
 
-func (l *ZiwiLog) Errorln(args ...any) { l.log.Sugar().Errorln(args...) }
+func (l *ZiwiLog) Errorln(args ...any) {
+	l.log.Sugar().Errorln(args...)
+}
 
-func Panicln(args ...any) { logger.log.Sugar().Panicln(args...) }
+func Panicln(args ...any) {
+	DefaultLogger().log.Sugar().Panicln(args...)
+}
 
-func (l *ZiwiLog) Panicln(args ...any) { l.log.Sugar().Panicln(args...) }
+func (l *ZiwiLog) Panicln(args ...any) {
+	l.log.Sugar().Panicln(args...)
+}
 
-func Fatalln(args ...any) { logger.log.Sugar().Fatalln(args...) }
+func Fatalln(args ...any) {
+	DefaultLogger().log.Sugar().Fatalln(args...)
+}
 
-func (l *ZiwiLog) Fatalln(args ...any) { l.log.Sugar().Fatalln(args...) }
+func (l *ZiwiLog) Fatalln(args ...any) {
+	l.log.Sugar().Fatalln(args...)
+}
 
 // Debugw logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func Debugw(msg string, ksAndvs ...any) { logger.log.Sugar().Debugw(msg, ksAndvs...) }
+func Debugw(msg string, keysAndValues ...any) {
+	DefaultLogger().log.Sugar().Debugw(msg, keysAndValues...)
+}
 
 // Debugw logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func (l *ZiwiLog) Debugw(msg string, ksAndvs ...any) { l.log.Sugar().Debugw(msg, ksAndvs...) }
+func (l *ZiwiLog) Debugw(msg string, keysAndValues ...any) {
+	l.log.Sugar().Debugw(msg, keysAndValues...)
+}
 
 // Infow logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func Infow(msg string, ksAndvs ...any) { logger.log.Sugar().Infow(msg, ksAndvs...) }
+func Infow(msg string, keysAndValues ...any) {
+	DefaultLogger().log.Sugar().Infow(msg, keysAndValues...)
+}
 
 // Infow logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func (l *ZiwiLog) Infow(msg string, keysAndValues ...any) { l.log.Sugar().Infow(msg, keysAndValues...) }
+func (l *ZiwiLog) Infow(msg string, keysAndValues ...any) {
+	l.log.Sugar().Infow(msg, keysAndValues...)
+}
 
 // Warnw logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func Warnw(msg string, keysAndValues ...any) { logger.log.Sugar().Warnw(msg, keysAndValues...) }
+func Warnw(msg string, keysAndValues ...any) {
+	DefaultLogger().log.Sugar().Warnw(msg, keysAndValues...)
+}
 
 // Warnw logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func (l *ZiwiLog) Warnw(msg string, keysAndValues ...any) { l.log.Sugar().Warnw(msg, keysAndValues...) }
+func (l *ZiwiLog) Warnw(msg string, keysAndValues ...any) {
+	l.log.Sugar().Warnw(msg, keysAndValues...)
+}
 
 // Errorw logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func Errorw(msg string, keysAndValues ...any) { logger.log.Sugar().Errorw(msg, keysAndValues...) }
+func Errorw(msg string, keysAndValues ...any) {
+	DefaultLogger().log.Sugar().Errorw(msg, keysAndValues...)
+}
 
 // Errorw logs a message with some additional context.
 // The variadic key-value pairs are treated as they are in With.
-func (l *ZiwiLog) Errorw(msg string, ksAndVs ...any) { l.log.Sugar().Errorw(msg, ksAndVs...) }
+func (l *ZiwiLog) Errorw(msg string, keysAndValues ...any) {
+	l.log.Sugar().Errorw(msg, keysAndValues...)
+}
 
 // Panicw logs a message with some additional context, then panics.
 // The variadic key-value pairs are treated as they are in With.
-func Panicw(msg string, keysAndValues ...any) { logger.log.Sugar().Panicw(msg, keysAndValues...) }
+func Panicw(msg string, keysAndValues ...any) {
+	DefaultLogger().log.Sugar().Panicw(msg, keysAndValues...)
+}
 
 // Panicw logs a message with some additional context, then panics.
 // The variadic key-value pairs are treated as they are in With.
-func (l *ZiwiLog) Panicw(msg string, ksAndvs ...any) { l.log.Sugar().Panicw(msg, ksAndvs...) }
+func (l *ZiwiLog) Panicw(msg string, keysAndValues ...any) {
+	l.log.Sugar().Panicw(msg, keysAndValues...)
+}
 
 // Fatalw logs a message with some additional context, then calls os.Exit.
 // The variadic key-value pairs are treated as they are in With.
-func Fatalw(msg string, ksAndvs ...any) { logger.log.Sugar().Fatalw(msg, ksAndvs...) }
+func Fatalw(msg string, keysAndValues ...any) {
+	DefaultLogger().log.Sugar().Fatalw(msg, keysAndValues...)
+}
 
 // Fatalw logs a message with some additional context, then calls os.Exit.
 // The variadic key-value pairs are treated as they are in With.
-func (l *ZiwiLog) Fatalw(msg string, ksAndvs ...any) { l.log.Sugar().Fatalw(msg, ksAndvs...) }
+func (l *ZiwiLog) Fatalw(msg string, keysAndValues ...any) {
+	l.log.Sugar().Fatalw(msg, keysAndValues...)
+}
 
 // Debugf formats the message according to the format specifier and logs it.
-func Debugf(template string, args ...any) { logger.log.Sugar().Debugf(template, args...) }
+func Debugf(template string, args ...any) {
+	DefaultLogger().log.Sugar().Debugf(template, args...)
+}
 
 // Debugf formats the message according to the format specifier and logs it.
-func (l *ZiwiLog) Debugf(template string, args ...any) { l.log.Sugar().Debugf(template, args...) }
+func (l *ZiwiLog) Debugf(template string, args ...any) {
+	l.log.Sugar().Debugf(template, args...)
+}
 
 // Infof formats the message according to the format specifier and logs it.
-func Infof(template string, args ...any) { logger.log.Sugar().Infof(template, args...) }
+func Infof(template string, args ...any) {
+	DefaultLogger().log.Sugar().Infof(template, args...)
+}
 
 // Infof formats the message according to the format specifier and logs it.
-func (l *ZiwiLog) Infof(template string, args ...any) { l.log.Sugar().Infof(template, args...) }
+func (l *ZiwiLog) Infof(template string, args ...any) {
+	l.log.Sugar().Infof(template, args...)
+}
 
 // Warnf formats the message according to the format specifier and logs it.
-func Warnf(template string, args ...any) { logger.log.Sugar().Warnf(template, args...) }
+func Warnf(template string, args ...any) {
+	DefaultLogger().log.Sugar().Warnf(template, args...)
+}
 
 // Warnf formats the message according to the format specifier and logs it.
-func (l *ZiwiLog) Warnf(template string, args ...any) { l.log.Sugar().Warnf(template, args...) }
+func (l *ZiwiLog) Warnf(template string, args ...any) {
+	l.log.Sugar().Warnf(template, args...)
+}
 
 // Errorf formats the message according to the format specifier and logs it.
-func Errorf(template string, args ...any) { logger.log.Sugar().Errorf(template, args...) }
+func Errorf(template string, args ...any) {
+	DefaultLogger().log.Sugar().Errorf(template, args...)
+}
 
 // Errorf formats the message according to the format specifier and logs it.
-func (l *ZiwiLog) Errorf(template string, args ...any) { l.log.Sugar().Errorf(template, args...) }
+func (l *ZiwiLog) Errorf(template string, args ...any) {
+	l.log.Sugar().Errorf(template, args...)
+}
 
 // Panicf formats the message according to the format specifier and panics.
-func Panicf(template string, args ...any) { logger.log.Sugar().Panicf(template, args...) }
+func Panicf(template string, args ...any) {
+	DefaultLogger().log.Sugar().Panicf(template, args...)
+}
 
 // Panicf formats the message according to the format specifier and panics.
-func (l *ZiwiLog) Panicf(template string, args ...any) { l.log.Sugar().Panicf(template, args...) }
+func (l *ZiwiLog) Panicf(template string, args ...any) {
+	l.log.Sugar().Panicf(template, args...)
+}
 
 // Fatalf formats the message according to the format specifier and calls os.Exit.
-func Fatalf(template string, args ...any) { logger.log.Sugar().Fatalf(template, args...) }
+func Fatalf(template string, args ...any) {
+	DefaultLogger().log.Sugar().Fatalf(template, args...)
+}
 
 // Fatalf formats the message according to the format specifier and calls os.Exit.
-func (l *ZiwiLog) Fatalf(template string, args ...any) { l.log.Sugar().Fatalf(template, args...) }
+func (l *ZiwiLog) Fatalf(template string, args ...any) {
+	l.log.Sugar().Fatalf(template, args...)
+}
