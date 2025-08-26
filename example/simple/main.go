@@ -41,7 +41,8 @@ func init() {
 	}
 
 	log.ReplaceLogger(
-		log.NewLogger(log.NewOptions().
+		log.NewLog(log.NewOptions().
+			WithFilename(viper.GetString("log.filename")).
 			WithPrefix(viper.GetString("log.prefix")).
 			WithDirectory(viper.GetString("log.directory")).
 			WithLevel(viper.GetString("log.level")).
@@ -57,4 +58,6 @@ func init() {
 
 func main() {
 	log.Infoln("This is template project")
+	log.Infoln("Log files will be created with custom filename prefix from config")
+	log.Errorln("This error will be logged to the error log file")
 }

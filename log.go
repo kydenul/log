@@ -255,7 +255,64 @@ func (l *Log) writeToFile(file *lumberjack.Logger, data []byte) error {
 	return nil
 }
 
-// setupLogFiles ensures log files are properly configured with thread safety
+// testFileCreation tests if a lumberjack logger can successfully create and write to its file.
+// This is used to validate that the filename and path are valid before committing to use them.
+func (l *Log) testFileCreation(logger *lumberjack.Logger) error {
+	if logger == nil {
+		return errors.New("logger is nil")
+	}
+
+	// Test by writing a small test message
+	testData := []byte("# Log file test\n")
+	if _, err := logger.Write(testData); err != nil {
+		return fmt.Errorf("failed to write test data to log file '%s': %w", logger.Filename, err)
+	}
+
+	return nil
+}
+
+// generateFileName generates the appropriate filename based on the Filename field and log type.
+// It implements different naming rules for main log files and error log files while ensuring
+// backward compatibility when Filename is empty.
+//
+// Parameters:
+//   - date: The date string to use in the filename (e.g., "2025-07-20")
+//   - isErrorLog: Whether this is for an error log file
+//
+// Returns:
+//   - string: The generated filename (without directory path)
+//
+// File naming rules:
+//   - Main log with Filename: "{filename}-{date}.log"
+//   - Main log without Filename: "{date}.log" (backward compatible)
+//   - Error log with Filename: "{filename}-{date}_error.log"
+//   - Error log without Filename: "{date}_error.log" (backward compatible)
+func (l *Log) generateFileName(date string, isErrorLog bool) string {
+	var baseName string
+
+	if l.opts.Filename != "" {
+		// Use custom prefix - sanitize it first to ensure it's safe
+		sanitized := sanitizeFilename(l.opts.Filename)
+		if sanitized != "" {
+			baseName = sanitized + "-" + date
+		} else {
+			// Fallback to default format if sanitization results in empty string
+			baseName = date
+		}
+	} else {
+		// Default format (backward compatible)
+		baseName = date
+	}
+
+	if isErrorLog {
+		return baseName + "_error.log"
+	}
+	return baseName + ".log"
+}
+
+// setupLogFiles ensures log files are properly configured with thread safety.
+// It handles file creation errors and implements fallback mechanisms to ensure
+// logging continues even when custom filenames cause issues.
 func (l *Log) setupLogFiles(date string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -272,29 +329,81 @@ func (l *Log) setupLogFiles(date string) error {
 		return fmt.Errorf("create log dir error: %w", err)
 	}
 
-	// Set main log file
+	// Set main log file using the new filename generation logic with error handling
 	if l.currDate != date || l.file == nil {
-		fileName := filepath.Join(l.logDir, date+".log")
-		l.file = &lumberjack.Logger{
-			Filename:   fileName,
+		fileName := l.generateFileName(date, false)
+		fullPath := filepath.Join(l.logDir, fileName)
+
+		// Create lumberjack logger with error handling
+		mainLogger := &lumberjack.Logger{
+			Filename:   fullPath,
 			MaxSize:    l.opts.MaxSize,    // megabytes
 			MaxBackups: l.opts.MaxBackups, // number of backups
 			Compress:   l.opts.Compress,   // compress rotated files
 		}
+
+		// Test file creation by attempting to write to it
+		if err := l.testFileCreation(mainLogger); err != nil {
+			// Fallback to default filename format if custom filename fails
+			fmt.Fprintf(os.Stderr, "Failed to create log file with custom filename '%s': %v. Falling back to default format.\n", fileName, err)
+
+			// Generate fallback filename (without custom prefix)
+			fallbackFileName := date + ".log"
+			fallbackPath := filepath.Join(l.logDir, fallbackFileName)
+			mainLogger = &lumberjack.Logger{
+				Filename:   fallbackPath,
+				MaxSize:    l.opts.MaxSize,
+				MaxBackups: l.opts.MaxBackups,
+				Compress:   l.opts.Compress,
+			}
+
+			// Test fallback file creation
+			if err := l.testFileCreation(mainLogger); err != nil {
+				return fmt.Errorf("failed to create fallback log file: %w", err)
+			}
+		}
+
+		l.file = mainLogger
 	}
 
-	// Set error log file (if needed)
+	// Set error log file (if needed) using the new filename generation logic with error handling
 	if !l.opts.DisableSplitError && (l.currDate != date || l.errFile == nil) {
-		errFileName := filepath.Join(l.logDir, date+"_error.log")
-		l.errFile = &lumberjack.Logger{
-			Filename:   errFileName,
+		errFileName := l.generateFileName(date, true)
+		errFullPath := filepath.Join(l.logDir, errFileName)
+
+		// Create error log lumberjack logger with error handling
+		errLogger := &lumberjack.Logger{
+			Filename:   errFullPath,
 			MaxSize:    l.opts.MaxSize,    // megabytes
 			MaxBackups: l.opts.MaxBackups, // number of backups
 			Compress:   l.opts.Compress,   // compress rotated files
 		}
+
+		// Test error file creation
+		if err := l.testFileCreation(errLogger); err != nil {
+			// Fallback to default error filename format if custom filename fails
+			fmt.Fprintf(os.Stderr, "Failed to create error log file with custom filename '%s': %v. Falling back to default format.\n", errFileName, err)
+
+			// Generate fallback error filename (without custom prefix)
+			fallbackErrFileName := date + "_error.log"
+			fallbackErrPath := filepath.Join(l.logDir, fallbackErrFileName)
+			errLogger = &lumberjack.Logger{
+				Filename:   fallbackErrPath,
+				MaxSize:    l.opts.MaxSize,
+				MaxBackups: l.opts.MaxBackups,
+				Compress:   l.opts.Compress,
+			}
+
+			// Test fallback error file creation
+			if err := l.testFileCreation(errLogger); err != nil {
+				return fmt.Errorf("failed to create fallback error log file: %w", err)
+			}
+		}
+
+		l.errFile = errLogger
 	}
 
-	// Update current date
+	// Update current date only after successful file setup
 	l.currDate = date
 	return nil
 }
