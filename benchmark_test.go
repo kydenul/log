@@ -17,7 +17,7 @@ func BenchmarkLogPerformance(b *testing.B) {
 		WithLevel("info").
 		WithDisableSplitError(true) // Disable error split for simpler benchmarking
 
-	logger := NewLogger(opts)
+	logger := NewLog(opts)
 	defer logger.Sync()
 
 	b.Run("SimpleInfo", func(b *testing.B) {
@@ -75,7 +75,7 @@ func BenchmarkLoggerCreation(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			opts := NewOptions().WithDirectory(tempDir)
-			logger := NewLogger(opts)
+			logger := NewLog(opts)
 			logger.Sync()
 		}
 	})
@@ -89,7 +89,7 @@ func BenchmarkLoggerCreation(b *testing.B) {
 				WithFormat("json").
 				WithMaxSize(50).
 				WithMaxBackups(5)
-			logger := NewLogger(opts)
+			logger := NewLog(opts)
 			logger.Sync()
 		}
 	})
@@ -107,7 +107,7 @@ func BenchmarkConcurrentLoggerReplace(b *testing.B) {
 				// Half of the goroutines replace logger, half access it
 				if pb.Next() {
 					opts := NewOptions().WithDirectory(tempDir)
-					newLogger := NewLogger(opts)
+					newLogger := NewLog(opts)
 					ReplaceLogger(newLogger)
 					newLogger.Sync()
 				} else {
@@ -127,7 +127,7 @@ func BenchmarkMemoryAllocations(b *testing.B) {
 		WithDirectory(tempDir).
 		WithPrefix("MEM_TEST_")
 
-	logger := NewLogger(opts)
+	logger := NewLog(opts)
 	defer logger.Sync()
 
 	b.Run("AllocationsPerLog", func(b *testing.B) {
@@ -173,4 +173,3 @@ func BenchmarkOptionsPerformance(b *testing.B) {
 		}
 	})
 }
-

@@ -1,8 +1,8 @@
 package log
 
 import (
-	"os"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,7 +26,7 @@ func TestLog_Option(t *testing.T) {
 	opts.TimeLayout = "2006-01-02 15:04:05.000"
 	assert.NotNil(t)
 
-	logger := NewLogger(opts)
+	logger := NewLog(opts)
 	defer logger.Sync()
 
 	for i := range 10_000 {
@@ -40,7 +40,7 @@ func TestLog_Option(t *testing.T) {
 func Test_Log(t *testing.T) {
 	t.Parallel()
 
-	logger := NewLogger(nil)
+	logger := NewLog(nil)
 
 	logger.Info("Test Log")
 	Info("Test Log")
@@ -94,7 +94,7 @@ func TestLoggerWithErrorNilCheck(t *testing.T) {
 		if !opts.DisableSplitError {
 			t.Fatalf("Expected DisableSplitError to be true by default, got false")
 		}
-		logger := NewLogger(opts)
+		logger := NewLog(opts)
 		logger.Debug("Debug message")
 		logger.Info("Info message")
 		logger.Warn("Warning message")
@@ -111,7 +111,7 @@ func TestLoggerWithErrorNilCheck(t *testing.T) {
 		if opts.DisableSplitError {
 			t.Fatalf("Expected DisableSplitError to be false, got true")
 		}
-		logger := NewLogger(opts)
+		logger := NewLog(opts)
 		logger.Debug("Debug message with error split")
 		logger.Info("Info message with error split")
 		logger.Warn("Warning message with error split")
@@ -132,7 +132,7 @@ func TestBufferPoolOptimization(t *testing.T) {
 		WithDirectory(testDir).
 		WithPrefix("POOL_TEST_")
 
-	logger := NewLogger(opts)
+	logger := NewLog(opts)
 	defer logger.Sync()
 
 	// Test that buffer pool is working by logging multiple messages
@@ -160,7 +160,7 @@ func TestAtomicLoggerAccess(t *testing.T) {
 	newOpts := NewOptions().
 		WithDirectory(testDir).
 		WithPrefix("ATOMIC_TEST_")
-	newLogger := NewLogger(newOpts)
+	newLogger := NewLog(newOpts)
 	defer newLogger.Sync()
 
 	ReplaceLogger(newLogger)
@@ -186,7 +186,7 @@ func TestConcurrentLoggerAccess(t *testing.T) {
 	const numOperations = 100
 
 	// Channel to collect results
-	results := make(chan *ZiwiLog, numGoroutines*numOperations)
+	results := make(chan *Log, numGoroutines*numOperations)
 
 	// Start multiple goroutines accessing DefaultLogger concurrently
 	for i := range numGoroutines {
@@ -211,7 +211,7 @@ func TestConcurrentLoggerAccess(t *testing.T) {
 			opts := NewOptions().
 				WithDirectory(testDir).
 				WithPrefix(fmt.Sprintf("CONCURRENT_%d_", id))
-			newLogger := NewLogger(opts)
+			newLogger := NewLog(opts)
 			defer newLogger.Sync()
 			ReplaceLogger(newLogger)
 		}(i)
@@ -234,7 +234,7 @@ func TestDateCheckOptimization(t *testing.T) {
 		WithDirectory(testDir).
 		WithPrefix("DATE_TEST_")
 
-	logger := NewLogger(opts)
+	logger := NewLog(opts)
 	defer logger.Sync()
 
 	// Test that date checking works correctly
@@ -266,7 +266,7 @@ func TestFileWriteRetry(t *testing.T) {
 		WithDirectory(testDir).
 		WithPrefix("RETRY_TEST_")
 
-	logger := NewLogger(opts)
+	logger := NewLog(opts)
 	defer logger.Sync()
 
 	// Test successful write
@@ -296,7 +296,7 @@ func TestSetupLogFiles(t *testing.T) {
 		WithDirectory(testDir).
 		WithPrefix("SETUP_TEST_")
 
-	logger := NewLogger(opts)
+	logger := NewLog(opts)
 	defer logger.Sync()
 
 	// Test setup with current date

@@ -132,7 +132,7 @@ func (opt *Options) WithTimeLayout(timeLayout string) *Options {
 }
 
 func (opt *Options) WithFormat(format string) *Options {
-	if format == "" || (format != "console" && format != "json") {
+	if format == "" || (format != DefaultFormat && format != "json") {
 		opt.Format = DefaultFormat
 	} else {
 		opt.Format = format
@@ -202,7 +202,7 @@ func (opt *Options) Validate() error {
 		return fmt.Errorf("invalid time layout: %s, expected: valid time layout", opt.TimeLayout)
 	}
 
-	if opt.Format != "console" && opt.Format != "json" {
+	if opt.Format != DefaultFormat && opt.Format != "json" {
 		return fmt.Errorf("invalid format: %s, expected: console or json", opt.Format)
 	}
 

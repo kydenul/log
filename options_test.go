@@ -242,7 +242,7 @@ func Test_isValidLevelString(t *testing.T) {
 	invalidLevels := []string{
 		"",
 		"invalid",
-		"INFO", // uppercase
+		"INFO",  // uppercase
 		"Debug", // mixed case
 		" info", // with space
 		"info ", // with trailing space
@@ -306,11 +306,11 @@ func Test_Options_ChainedValidation(t *testing.T) {
 
 	// Test that invalid values get corrected by With* methods
 	opts := NewOptions().
-		WithLevel(""). // Should use default
+		WithLevel("").     // Should use default
 		WithFormat("xml"). // Should use default
-		WithMaxSize(-5). // Should use default
+		WithMaxSize(-5).   // Should use default
 		WithMaxBackups(0). // Should use default
-		WithDirectory("") // Should use default
+		WithDirectory("")  // Should use default
 
 	// All values should be corrected to defaults
 	asrt.Equal(DefaultLevel.String(), opts.Level)
