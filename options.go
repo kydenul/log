@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"go.uber.org/zap/zapcore"
 
@@ -24,6 +25,7 @@ const (
 	DefaultLevel      = zapcore.InfoLevel
 	DefaultTimeLayout = "2006-01-02 15:04:05.000"
 	DefaultFormat     = "console" // console style
+	DefaultFilename   = ""        // Empty string means use default date format
 
 	DefaultDisableCaller     = false
 	DefaultDisableStacktrace = false
@@ -38,6 +40,7 @@ const (
 type Options struct {
 	Prefix    string // Log Prefix, e.g ZIWI
 	Directory string // Log File Directory, e.g logs
+	Filename  string // Log filename prefix, e.g "myapp" generates "myapp-2025-07-20.log"
 
 	Level      string // Log Level, "debug", "info", "warn", "error"
 	TimeLayout string // Time Layout, e.g "2006-01-02 15:04:05.000"
@@ -76,6 +79,7 @@ func NewOptions() *Options {
 	opt := &Options{
 		Prefix:    DefaultPrefix,
 		Directory: DefaultDirectory,
+		Filename:  DefaultFilename,
 
 		Level:      DefaultLevel.String(),
 		TimeLayout: DefaultTimeLayout,
@@ -113,6 +117,11 @@ func (opt *Options) WithDirectory(dir string) *Options {
 	return opt
 }
 
+func (opt *Options) WithFilename(filename string) *Options {
+	opt.Filename = filename
+	return opt
+}
+
 func (opt *Options) WithLevel(level string) *Options {
 	if level == "" || !isValidLevelString(level) {
 		opt.Level = DefaultLevel.String()
@@ -132,7 +141,7 @@ func (opt *Options) WithTimeLayout(timeLayout string) *Options {
 }
 
 func (opt *Options) WithFormat(format string) *Options {
-	if format == "" || (format != "console" && format != "json") {
+	if format == "" || (format != DefaultFormat && format != "json") {
 		opt.Format = DefaultFormat
 	} else {
 		opt.Format = format
@@ -194,6 +203,14 @@ func (opt *Options) Validate() error {
 		return fmt.Errorf("invalid directory: %s, expected: not empty", opt.Directory)
 	}
 
+	// Validate filename if provided
+	if opt.Filename != "" {
+		sanitized := sanitizeFilename(opt.Filename)
+		if sanitized == "" {
+			return fmt.Errorf("invalid filename: %s, results in empty name after sanitization", opt.Filename)
+		}
+	}
+
 	if !isValidLevelString(opt.Level) {
 		return fmt.Errorf("invalid level: %s, expected: debug, info, warn, error, dpanic, panic or fatal", opt.Level)
 	}
@@ -202,7 +219,7 @@ func (opt *Options) Validate() error {
 		return fmt.Errorf("invalid time layout: %s, expected: valid time layout", opt.TimeLayout)
 	}
 
-	if opt.Format != "console" && opt.Format != "json" {
+	if opt.Format != DefaultFormat && opt.Format != "json" {
 		return fmt.Errorf("invalid format: %s, expected: console or json", opt.Format)
 	}
 
@@ -215,4 +232,52 @@ func (opt *Options) Validate() error {
 	}
 
 	return nil
+}
+
+// sanitizeFilename cleans and validates a filename by removing unsafe characters,
+// limiting length, and ensuring the filename is valid for filesystem use.
+// It returns the sanitized filename or an empty string if the input results in an invalid filename.
+func sanitizeFilename(filename string) string {
+	if filename == "" {
+		return ""
+	}
+
+	// Remove unsafe characters that are not allowed in filenames
+	unsafe := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
+	cleaned := filename
+	for _, char := range unsafe {
+		cleaned = strings.ReplaceAll(cleaned, char, "_")
+	}
+
+	// Additional validation: ensure no control characters
+	for _, r := range cleaned {
+		if r < 32 || r == 127 { // ASCII control characters
+			cleaned = strings.ReplaceAll(cleaned, string(r), "_")
+		}
+	}
+
+	// Clean whitespace characters
+	cleaned = strings.TrimSpace(cleaned)
+
+	// Check if filename is only dots and/or underscores after cleaning
+	if strings.Trim(cleaned, "._") == "" {
+		return ""
+	}
+
+	// Ensure filename doesn't start with a dot (hidden files)
+	if strings.HasPrefix(cleaned, ".") {
+		cleaned = "_" + cleaned[1:]
+	}
+
+	// Limit length to prevent filesystem issues (max 100 characters)
+	if len(cleaned) > 100 {
+		cleaned = cleaned[:100]
+	}
+
+	// Ensure filename is not empty after cleaning
+	if cleaned == "" {
+		return ""
+	}
+
+	return cleaned
 }
