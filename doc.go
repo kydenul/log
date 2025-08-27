@@ -1,7 +1,7 @@
-// Package log provides a structured logging facility for the Ziwi framework.
+// Package log provides a high-performance, structured logging facility for Go applications.
 //
 // This package is built on top of the zap logging library (go.uber.org/zap) and provides
-// a simplified interface for common logging patterns. It supports various log levels,
+// enhanced usability features with a simplified interface. It supports various log levels,
 // structured logging with key-value pairs, and different output formats.
 //
 // Features:
@@ -14,59 +14,73 @@
 //   - Log file rotation by date
 //   - Separate error log files
 //   - Optional caller information and stack traces
+//   - Environment presets for development, production, and testing
+//   - Builder pattern for fluent configuration
+//   - Multi-format configuration support (YAML, JSON, TOML) via Viper
+//   - HTTP middleware for request/response logging
+//   - Performance optimizations (buffering, sampling)
 //
-// Basic Usage:
+// Quick Start:
 //
-//	// Initialize with custom options
-//	opts := log.NewOptions()
-//	opts.Level = "debug"
-//	opts.Format = "json"
-//	log.Init(opts)
+//	// Zero-configuration quick start
+//	logger := log.Quick()
+//	logger.Info("Hello, World!")
 //
-//	// Simple logging
-//	log.Debug("Debug message")
-//	log.Info("Info message")
-//	log.Warn("Warning message")
-//	log.Error("Error message")
+//	// Use environment presets
+//	devLogger := log.WithPreset(log.DevelopmentPreset())
+//	prodLogger := log.WithPreset(log.ProductionPreset())
+//
+//	// Builder pattern for custom configuration
+//	logger := log.NewBuilder().
+//	    Level("debug").
+//	    Format("json").
+//	    Directory("./logs").
+//	    Build()
+//
+// Structured Logging:
 //
 //	// Structured logging with key-value pairs
-//	log.Infow("User logged in", "user_id", 123, "ip", "192.168.1.1")
-//	log.Errorw("Database connection failed", "error", err, "retry", true)
+//	logger.Infow("User logged in", "user_id", 123, "ip", "192.168.1.1")
+//	logger.Errorw("Database connection failed", "error", err, "retry", true)
 //
 //	// Format string logging
-//	log.Debugf("Processing item %d of %d", i, total)
-//	log.Errorf("Failed to connect to %s: %v", host, err)
+//	logger.Debugf("Processing item %d of %d", i, total)
+//	logger.Errorf("Failed to connect to %s: %v", host, err)
 //
 // Configuration:
-// The logger can be configured through the Options struct:
+// The logger can be configured through multiple methods and formats:
 //
-//	type Options struct {
-//	    Prefix    string // Log prefix, e.g., "ZIWI"
-//	    Directory string // Log file directory, e.g., "logs"
+//	// Multi-format configuration (powered by Viper)
+//	logger, err := log.FromConfigFile("config.yaml") // YAML format
+//	logger, err := log.FromConfigFile("config.json") // JSON format
+//	logger, err := log.FromConfigFile("config.toml") // TOML format
 //
-//	    Level      string // "debug", "info", "warn", "error", "dpanic", "panic", "fatal"
-//	    TimeLayout string // Time format, default: "2006-01-02 15:04:05.000"
-//	    Format     string // "console" or "json"
+//	// Direct options loading
+//	opts, err := log.LoadFromFile("config.yaml")
+//	logger := log.NewLog(opts)
 //
-//	    DisableCaller     bool // Disable caller information
-//	    DisableStacktrace bool // Disable stack traces
-//	    DisableSplitError bool // Disable separate error log files
-//	}
+//	// Traditional options
+//	logger := log.NewLog(log.NewOptions().
+//	    WithLevel("debug").
+//	    WithFormat("json").
+//	    WithDirectory("./logs"))
 //
-// Example configuration in ziwi.yaml:
+// HTTP Middleware:
 //
-//	log:
-//	  disable-caller: false
-//	  disable-stacktrace: false
-//	  level: debug
-//	  format: console
-//	  output-paths: [/tmp/ziwi.log, stdout]
+//	middleware := log.HTTPMiddleware(logger)
+//	http.Handle("/api", middleware(handler))
 //
-// Custom Logger:
-// You can create a custom logger instance for specific components:
+// Utility Functions:
 //
-//	customOpts := log.NewOptions()
-//	customOpts.Prefix = "MYCOMPONENT"
-//	customLogger := log.NewLogger(customOpts)
-//	customLogger.Info("Component initialized")
+//	import "github.com/kydenul/log/logutil"
+//
+//	// Error handling
+//	logutil.LogError(logger, err, "Operation failed")
+//	logutil.FatalOnError(logger, err, "Critical error")
+//
+//	// Performance timing
+//	defer logutil.Timer(logger, "operation_name")()
+//
+//	// Conditional logging
+//	logutil.InfoIf(logger, condition, "Message", "key", "value")
 package log

@@ -25,7 +25,7 @@ const (
 	DefaultLevel      = zapcore.InfoLevel
 	DefaultTimeLayout = "2006-01-02 15:04:05.000"
 	DefaultFormat     = "console" // console style
-	DefaultFilename   = ""        // Empty string means use default date format
+	DefaultFilename   = ""        // Default filename prefix
 
 	DefaultDisableCaller     = false
 	DefaultDisableStacktrace = false
@@ -34,26 +34,47 @@ const (
 	DefaultMaxSize    = 100   // 100MB
 	DefaultMaxBackups = 3     // Keep 3 old log files
 	DefaultCompress   = false // Not compress rotated log files
+
+	// Defaults for sampling functionality
+	DefaultEnableSampling   = false // Sampling disabled by default
+	DefaultSampleInitial    = 100   // Initial sample count
+	DefaultSampleThereafter = 100   // Subsequent sample count
+
+	FormatConsole = "console"
+	FormatJSON    = "json"
+
+	LevelDebug = "debug"
+	LevelInfo  = "info"
 )
 
 // Options for logger
 type Options struct {
-	Prefix    string // Log Prefix, e.g ZIWI
-	Directory string // Log File Directory, e.g logs
-	Filename  string // Log filename prefix, e.g "myapp" generates "myapp-2025-07-20.log"
+	Prefix     string `mapstructure:"prefix"`      // Log Prefix
+	Directory  string `mapstructure:"directory"`   // Log File Directory
+	Filename   string `mapstructure:"filename"`    // Log filename prefix
+	Level      string `mapstructure:"level"`       // Log Level
+	TimeLayout string `mapstructure:"time_layout"` // Time Layout
+	Format     string `mapstructure:"format"`      // Log Format
 
-	Level      string // Log Level, "debug", "info", "warn", "error"
-	TimeLayout string // Time Layout, e.g "2006-01-02 15:04:05.000"
-	Format     string // Log Format, "console", "json"
+	DisableCaller     bool `mapstructure:"disable_caller"`
+	DisableStacktrace bool `mapstructure:"disable_stacktrace"`
+	DisableSplitError bool `mapstructure:"disable_split_error"`
 
-	DisableCaller     bool // Disable caller information
-	DisableStacktrace bool // Disable stack traces
-	DisableSplitError bool // Disable separate error log files
-
+	// -----------------
 	// Log rotation settings
-	MaxSize    int  // Maximum size of log files in megabytes before rotation
-	MaxBackups int  // Maximum number of old log files to retain
-	Compress   bool // Whether to compress rotated log files
+	// -----------------
+
+	MaxSize    int  `mapstructure:"max_size"`    // Maximum size of log files in megabytes
+	MaxBackups int  `mapstructure:"max_backups"` // Maximum number of old log files
+	Compress   bool `mapstructure:"compress"`    // Whether to compress rotated log files
+
+	// -----------------
+	// Sampling settings
+	// -----------------
+
+	EnableSampling   bool `mapstructure:"enable_sampling"`
+	SampleInitial    int  `mapstructure:"sample_initial"`
+	SampleThereafter int  `mapstructure:"sample_thereafter"`
 }
 
 // NewOptions return the default Options.
@@ -75,6 +96,11 @@ type Options struct {
 //	MaxSize:    100, // 100MB
 //	MaxBackups: 3,   // Keep 3 old log files
 //	Compress:   false,
+//
+//	// Sampling settings
+//	EnableSampling:   false, // Sampling disabled by default
+//	SampleInitial:    100,   // Initial sample count
+//	SampleThereafter: 100,   // Subsequent sample count
 func NewOptions() *Options {
 	opt := &Options{
 		Prefix:    DefaultPrefix,
@@ -93,6 +119,11 @@ func NewOptions() *Options {
 		MaxSize:    DefaultMaxSize,
 		MaxBackups: DefaultMaxBackups,
 		Compress:   DefaultCompress,
+
+		// Sampling settings
+		EnableSampling:   DefaultEnableSampling,
+		SampleInitial:    DefaultSampleInitial,
+		SampleThereafter: DefaultSampleThereafter,
 	}
 
 	if err := opt.Validate(); err != nil {
@@ -187,6 +218,21 @@ func (opt *Options) WithCompress(compress bool) *Options {
 	return opt
 }
 
+func (opt *Options) WithSampling(enable bool, initial, thereafter int) *Options {
+	opt.EnableSampling = enable
+	if initial > 0 {
+		opt.SampleInitial = initial
+	} else {
+		opt.SampleInitial = DefaultSampleInitial
+	}
+	if thereafter > 0 {
+		opt.SampleThereafter = thereafter
+	} else {
+		opt.SampleThereafter = DefaultSampleThereafter
+	}
+	return opt
+}
+
 // isValidLevelString checks if the provided level string is valid
 func isValidLevelString(level string) bool {
 	return level == zapcore.DebugLevel.String() ||
@@ -229,6 +275,16 @@ func (opt *Options) Validate() error {
 
 	if opt.MaxBackups <= 0 {
 		return fmt.Errorf("invalid max backups: %d, expected: > 0", opt.MaxBackups)
+	}
+
+	// Validate sampling settings
+	if opt.EnableSampling {
+		if opt.SampleInitial <= 0 {
+			return fmt.Errorf("invalid sample initial: %d, expected: > 0", opt.SampleInitial)
+		}
+		if opt.SampleThereafter <= 0 {
+			return fmt.Errorf("invalid sample thereafter: %d, expected: > 0", opt.SampleThereafter)
+		}
 	}
 
 	return nil

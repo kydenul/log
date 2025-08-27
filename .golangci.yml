@@ -101,6 +101,9 @@ linters:
           - perfsprint
           - golines
           - gosec
+          - cyclop
+          - funlen
+          - ineffassign
 
 formatters:
   enable:

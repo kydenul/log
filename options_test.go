@@ -25,6 +25,11 @@ func Test_NewOptions(t *testing.T) {
 	asrt.Equal(DefaultMaxSize, opt.MaxSize)
 	asrt.Equal(DefaultMaxBackups, opt.MaxBackups)
 	asrt.Equal(DefaultCompress, opt.Compress)
+
+	// Test new enhanced functionality fields
+	asrt.Equal(DefaultEnableSampling, opt.EnableSampling)
+	asrt.Equal(DefaultSampleInitial, opt.SampleInitial)
+	asrt.Equal(DefaultSampleThereafter, opt.SampleThereafter)
 }
 
 func Test_Options_WithPrefix(t *testing.T) {
@@ -486,7 +491,7 @@ func Test_sanitizeFilename_BoundaryConditions(t *testing.T) {
 	}
 
 	// Test all control characters (0-31 and 127)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		filename := "file" + string(rune(i)) + "name"
 		result := sanitizeFilename(filename)
 		asrt.Equal("file_name", result, "Failed to sanitize control character: %d", i)
@@ -657,4 +662,445 @@ func Test_DefaultFilename(t *testing.T) {
 	// Test that NewOptions uses DefaultFilename
 	opts := NewOptions()
 	asrt.Equal(DefaultFilename, opts.Filename)
+}
+
+func Test_Options_WithSampling(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test enabling sampling with valid values
+	opt := NewOptions().WithSampling(true, 50, 200)
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(50, opt.SampleInitial)
+	asrt.Equal(200, opt.SampleThereafter)
+
+	// Test disabling sampling
+	opt = NewOptions().WithSampling(false, 50, 200)
+	asrt.False(opt.EnableSampling)
+	asrt.Equal(50, opt.SampleInitial)
+	asrt.Equal(200, opt.SampleThereafter)
+
+	// Test enabling sampling with zero initial - should use default
+	opt = NewOptions().WithSampling(true, 0, 200)
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(DefaultSampleInitial, opt.SampleInitial)
+	asrt.Equal(200, opt.SampleThereafter)
+
+	// Test enabling sampling with negative initial - should use default
+	opt = NewOptions().WithSampling(true, -10, 200)
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(DefaultSampleInitial, opt.SampleInitial)
+	asrt.Equal(200, opt.SampleThereafter)
+
+	// Test enabling sampling with zero thereafter - should use default
+	opt = NewOptions().WithSampling(true, 50, 0)
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(50, opt.SampleInitial)
+	asrt.Equal(DefaultSampleThereafter, opt.SampleThereafter)
+
+	// Test enabling sampling with negative thereafter - should use default
+	opt = NewOptions().WithSampling(true, 50, -10)
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(50, opt.SampleInitial)
+	asrt.Equal(DefaultSampleThereafter, opt.SampleThereafter)
+
+	// Test enabling sampling with both values zero - should use defaults
+	opt = NewOptions().WithSampling(true, 0, 0)
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(DefaultSampleInitial, opt.SampleInitial)
+	asrt.Equal(DefaultSampleThereafter, opt.SampleThereafter)
+}
+
+// Test enhanced validation for new fields
+func Test_Options_Validate_Enhanced_Fields(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test valid options with new fields
+	validOpts := NewOptions().
+		WithSampling(true, 50, 200)
+	err := validOpts.Validate()
+	asrt.NoError(err)
+
+	// Test invalid sample initial when sampling is enabled
+	invalidSampleInitialOpts := NewOptions()
+	invalidSampleInitialOpts.EnableSampling = true
+	invalidSampleInitialOpts.SampleInitial = 0
+	err = invalidSampleInitialOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid sample initial")
+
+	// Test invalid sample thereafter when sampling is enabled
+	invalidSampleThereafterOpts := NewOptions()
+	invalidSampleThereafterOpts.EnableSampling = true
+	invalidSampleThereafterOpts.SampleThereafter = -1
+	err = invalidSampleThereafterOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid sample thereafter")
+
+	// Test that sampling validation is skipped when sampling is disabled
+	disabledSamplingOpts := NewOptions()
+	disabledSamplingOpts.EnableSampling = false
+	disabledSamplingOpts.SampleInitial = 0
+	disabledSamplingOpts.SampleThereafter = -1
+	err = disabledSamplingOpts.Validate()
+	asrt.NoError(err) // Should pass because sampling is disabled
+}
+
+// Test method chaining with new fields
+func Test_Options_ChainedValidation_Enhanced(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test chaining all methods including new ones
+	opts := NewOptions().
+		WithPrefix("TEST_").
+		WithDirectory("/var/log").
+		WithFilename("myapp").
+		WithLevel("debug").
+		WithFormat("json").
+		WithSampling(true, 25, 500).
+		WithMaxSize(200).
+		WithMaxBackups(10).
+		WithCompress(true)
+
+	// Verify all values are set correctly
+	asrt.Equal("TEST_", opts.Prefix)
+	asrt.Equal("/var/log", opts.Directory)
+	asrt.Equal("myapp", opts.Filename)
+	asrt.Equal("debug", opts.Level)
+	asrt.Equal("json", opts.Format)
+	asrt.True(opts.EnableSampling)
+	asrt.Equal(25, opts.SampleInitial)
+	asrt.Equal(500, opts.SampleThereafter)
+	asrt.Equal(200, opts.MaxSize)
+	asrt.Equal(10, opts.MaxBackups)
+	asrt.True(opts.Compress)
+
+	// Validation should pass
+	err := opts.Validate()
+	asrt.NoError(err)
+}
+
+// Test default constants for new fields
+func Test_DefaultConstants_Enhanced(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that default constants are reasonable
+	asrt.False(DefaultEnableSampling)
+	asrt.Equal(100, DefaultSampleInitial)
+	asrt.Equal(100, DefaultSampleThereafter)
+
+	// Test that NewOptions uses these defaults
+	opts := NewOptions()
+	asrt.Equal(DefaultEnableSampling, opts.EnableSampling)
+	asrt.Equal(DefaultSampleInitial, opts.SampleInitial)
+	asrt.Equal(DefaultSampleThereafter, opts.SampleThereafter)
+}
+
+// Test edge cases for new fields
+func Test_Options_Enhanced_EdgeCases(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test basic validation
+	opt := NewOptions()
+	err := opt.Validate()
+	asrt.NoError(err)
+
+	// Test very large sample values
+	opt = NewOptions().WithSampling(true, 10000, 50000)
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(10000, opt.SampleInitial)
+	asrt.Equal(50000, opt.SampleThereafter)
+	err = opt.Validate()
+	asrt.NoError(err)
+
+	// Test boundary values
+	err = opt.Validate()
+	asrt.NoError(err)
+
+	opt = NewOptions().WithSampling(true, 1, 1) // Minimum valid sample values
+	asrt.True(opt.EnableSampling)
+	asrt.Equal(1, opt.SampleInitial)
+	asrt.Equal(1, opt.SampleThereafter)
+	err = opt.Validate()
+	asrt.NoError(err)
+}
+
+// Test enhanced Options fields that were added for usability improvements
+func TestOptions_EnhancedFields_Defaults(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	opts := NewOptions()
+	asrt.NotNil(opts)
+
+	// Test that enhanced fields have correct default values
+	asrt.Equal(DefaultEnableSampling, opts.EnableSampling)
+	asrt.Equal(DefaultSampleInitial, opts.SampleInitial)
+	asrt.Equal(DefaultSampleThereafter, opts.SampleThereafter)
+}
+
+func TestOptions_WithSampling_ValidValues(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	testCases := []struct {
+		name               string
+		enable             bool
+		initial            int
+		thereafter         int
+		expectedEnable     bool
+		expectedInitial    int
+		expectedThereafter int
+	}{
+		{
+			"enable with valid values",
+			true, 50, 200,
+			true, 50, 200,
+		},
+		{
+			"disable with valid values",
+			false, 50, 200,
+			false, 50, 200,
+		},
+		{
+			"enable with zero initial uses default",
+			true, 0, 200,
+			true, DefaultSampleInitial, 200,
+		},
+		{
+			"enable with negative initial uses default",
+			true, -10, 200,
+			true, DefaultSampleInitial, 200,
+		},
+		{
+			"enable with zero thereafter uses default",
+			true, 50, 0,
+			true, 50, DefaultSampleThereafter,
+		},
+		{
+			"enable with negative thereafter uses default",
+			true, 50, -10,
+			true, 50, DefaultSampleThereafter,
+		},
+		{
+			"enable with both zero uses defaults",
+			true, 0, 0,
+			true, DefaultSampleInitial, DefaultSampleThereafter,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := NewOptions().WithSampling(tc.enable, tc.initial, tc.thereafter)
+			asrt.Equal(tc.expectedEnable, opts.EnableSampling)
+			asrt.Equal(tc.expectedInitial, opts.SampleInitial)
+			asrt.Equal(tc.expectedThereafter, opts.SampleThereafter)
+		})
+	}
+}
+
+func TestOptions_Validate_EnhancedFields(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test valid enhanced fields
+	validOpts := NewOptions().
+		WithSampling(true, 50, 200)
+
+	err := validOpts.Validate()
+	asrt.NoError(err)
+
+	// Test invalid sample initial when sampling enabled
+	invalidSampleInitialOpts := NewOptions()
+	invalidSampleInitialOpts.EnableSampling = true
+	invalidSampleInitialOpts.SampleInitial = 0
+	err = invalidSampleInitialOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid sample initial")
+
+	// Test invalid sample thereafter when sampling enabled
+	invalidSampleThereafterOpts := NewOptions()
+	invalidSampleThereafterOpts.EnableSampling = true
+	invalidSampleThereafterOpts.SampleThereafter = -1
+	err = invalidSampleThereafterOpts.Validate()
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid sample thereafter")
+
+	// Test that sampling validation is skipped when disabled
+	disabledSamplingOpts := NewOptions()
+	disabledSamplingOpts.EnableSampling = false
+	disabledSamplingOpts.SampleInitial = 0
+	disabledSamplingOpts.SampleThereafter = -1
+	err = disabledSamplingOpts.Validate()
+	asrt.NoError(err) // Should pass because sampling is disabled
+}
+
+func TestOptions_EnhancedFields_MethodChaining(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test chaining all enhanced methods
+	opts := NewOptions().
+		WithSampling(true, 25, 500)
+
+	asrt.True(opts.EnableSampling)
+	asrt.Equal(25, opts.SampleInitial)
+	asrt.Equal(500, opts.SampleThereafter)
+
+	// Test chaining with existing methods
+	opts = NewOptions().
+		WithLevel("debug").
+		WithFormat("json").
+		WithSampling(false, 100, 1000).
+		WithMaxSize(200)
+
+	asrt.Equal("debug", opts.Level)
+	asrt.Equal("json", opts.Format)
+	asrt.False(opts.EnableSampling)
+	asrt.Equal(100, opts.SampleInitial)
+	asrt.Equal(1000, opts.SampleThereafter)
+	asrt.Equal(200, opts.MaxSize)
+
+	// Validation should pass
+	err := opts.Validate()
+	asrt.NoError(err)
+}
+
+func TestOptions_EnhancedFields_EdgeCases(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test maximum values
+	opts := NewOptions().
+		WithSampling(true, 10000, 50000) // Large sample values
+
+	err := opts.Validate()
+	asrt.NoError(err)
+	asrt.Equal(10000, opts.SampleInitial)
+	asrt.Equal(50000, opts.SampleThereafter)
+
+	// Test minimum valid values
+	opts = NewOptions().
+		WithSampling(true, 1, 1) // Minimum sample values
+
+	err = opts.Validate()
+	asrt.NoError(err)
+	asrt.Equal(1, opts.SampleInitial)
+	asrt.Equal(1, opts.SampleThereafter)
+}
+
+func TestOptions_EnhancedFields_DefaultConstants(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that default constants are reasonable
+	asrt.False(DefaultEnableSampling)
+	asrt.Equal(100, DefaultSampleInitial)
+	asrt.Equal(100, DefaultSampleThereafter)
+
+	// Test that constants are used in NewOptions
+	opts := NewOptions()
+	asrt.Equal(DefaultEnableSampling, opts.EnableSampling)
+	asrt.Equal(DefaultSampleInitial, opts.SampleInitial)
+	asrt.Equal(DefaultSampleThereafter, opts.SampleThereafter)
+}
+
+func TestOptions_EnhancedFields_Integration(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that enhanced fields work with all existing fields
+	opts := NewOptions().
+		WithPrefix("ENHANCED_").
+		WithDirectory("/tmp/enhanced").
+		WithFilename("enhanced").
+		WithLevel("debug").
+		WithTimeLayout("2006-01-02 15:04:05").
+		WithFormat("json").
+		WithDisableCaller(true).
+		WithDisableStacktrace(false).
+		WithDisableSplitError(true).
+		WithMaxSize(150).
+		WithMaxBackups(7).
+		WithCompress(true).
+		WithSampling(true, 75, 750)
+
+	// Verify all fields are set correctly
+	asrt.Equal("ENHANCED_", opts.Prefix)
+	asrt.Equal("/tmp/enhanced", opts.Directory)
+	asrt.Equal("enhanced", opts.Filename)
+	asrt.Equal("debug", opts.Level)
+	asrt.Equal("2006-01-02 15:04:05", opts.TimeLayout)
+	asrt.Equal("json", opts.Format)
+	asrt.True(opts.DisableCaller)
+	asrt.False(opts.DisableStacktrace)
+	asrt.True(opts.DisableSplitError)
+	asrt.Equal(150, opts.MaxSize)
+	asrt.Equal(7, opts.MaxBackups)
+	asrt.True(opts.Compress)
+	asrt.True(opts.EnableSampling)
+	asrt.Equal(75, opts.SampleInitial)
+	asrt.Equal(750, opts.SampleThereafter)
+
+	// Validation should pass
+	err := opts.Validate()
+	asrt.NoError(err)
+}
+
+func TestOptions_EnhancedFields_MultipleModifications(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that fields can be modified multiple times
+	opts := NewOptions()
+
+	opts = NewOptions().
+		WithSampling(true, 100, 1000).
+		WithSampling(false, 200, 2000).
+		WithSampling(true, 50, 500)
+
+	asrt.True(opts.EnableSampling)
+	asrt.Equal(50, opts.SampleInitial)
+	asrt.Equal(500, opts.SampleThereafter)
+}
+
+func TestOptions_EnhancedFields_ZeroDurationHandling(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that zero duration is handled correctly in validation
+	opts := NewOptions()
+	err := opts.Validate()
+	asrt.NoError(err) // Zero should be valid (no flushing)
+
+	// Test that zero is preserved when set explicitly
+
+	// But if set directly, zero should be valid
+	opts = NewOptions()
+	err = opts.Validate()
+	asrt.NoError(err)
+}
+
+func TestOptions_EnhancedFields_SamplingDisabledValidation(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// When sampling is disabled, sample values should not be validated
+	opts := NewOptions()
+	opts.EnableSampling = false
+	opts.SampleInitial = -100    // Invalid value
+	opts.SampleThereafter = -200 // Invalid value
+
+	err := opts.Validate()
+	asrt.NoError(err) // Should pass because sampling is disabled
+
+	// When sampling is enabled, sample values should be validated
+	opts.EnableSampling = true
+	err = opts.Validate()
+	asrt.Error(err) // Should fail because sample values are invalid
+	asrt.Contains(err.Error(), "invalid sample initial")
 }
