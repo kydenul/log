@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +27,7 @@ func TestBuilderChaining(t *testing.T) {
 	builder := NewBuilder().
 		Level("debug").
 		Format("json").
-		Directory("./test_logs").
+		Directory("./logs/test_logs").
 		Filename("test").
 		Prefix("TEST_").
 		DisableCaller(true).
@@ -36,17 +35,14 @@ func TestBuilderChaining(t *testing.T) {
 		MaxSize(50).
 		MaxBackups(2).
 		Compress(true).
-		BufferSize(1024).
-		FlushInterval(2*time.Second).
 		Sampling(true, 50, 500)
 
 	require.NotNil(t, builder)
 
-	// Verify all options were set correctly
 	opts := builder.opts
 	assert.Equal(t, "debug", opts.Level)
 	assert.Equal(t, "json", opts.Format)
-	assert.Equal(t, "./test_logs", opts.Directory)
+	assert.Equal(t, "./logs/test_logs", opts.Directory)
 	assert.Equal(t, "test", opts.Filename)
 	assert.Equal(t, "TEST_", opts.Prefix)
 	assert.True(t, opts.DisableCaller)
@@ -54,8 +50,7 @@ func TestBuilderChaining(t *testing.T) {
 	assert.Equal(t, 50, opts.MaxSize)
 	assert.Equal(t, 2, opts.MaxBackups)
 	assert.True(t, opts.Compress)
-	assert.Equal(t, 1024, opts.BufferSize)
-	assert.Equal(t, 2*time.Second, opts.FlushInterval)
+
 	assert.True(t, opts.EnableSampling)
 	assert.Equal(t, 50, opts.SampleInitial)
 	assert.Equal(t, 500, opts.SampleThereafter)
@@ -148,7 +143,6 @@ func TestBuilderWithPresetAndOverrides(t *testing.T) {
 	assert.Equal(t, 200, opts.MaxSize)      // Overridden
 	assert.False(t, opts.DisableCaller)     // From development preset
 	assert.False(t, opts.DisableStacktrace) // From development preset
-	assert.Equal(t, 512, opts.BufferSize)   // From development preset
 }
 
 func TestBuilderInvalidValues(t *testing.T) {
@@ -157,8 +151,7 @@ func TestBuilderInvalidValues(t *testing.T) {
 		Level("invalid_level").   // Should fallback to default
 		Format("invalid_format"). // Should fallback to default
 		MaxSize(-1).              // Should fallback to default
-		MaxBackups(0).            // Should fallback to default
-		BufferSize(-100)          // Should fallback to default
+		MaxBackups(0)             // Should fallback to default
 
 	opts := builder.opts
 
@@ -167,7 +160,6 @@ func TestBuilderInvalidValues(t *testing.T) {
 	assert.Equal(t, DefaultFormat, opts.Format)
 	assert.Equal(t, DefaultMaxSize, opts.MaxSize)
 	assert.Equal(t, DefaultMaxBackups, opts.MaxBackups)
-	assert.Equal(t, DefaultBufferSize, opts.BufferSize)
 }
 
 func TestBuilderMultiplePresets(t *testing.T) {
@@ -233,8 +225,6 @@ func TestNewBuilder_Initialization(t *testing.T) {
 	asrt.Equal(DefaultFormat, builder.opts.Format)
 	asrt.Equal(DefaultDirectory, builder.opts.Directory)
 	asrt.Equal(DefaultPrefix, builder.opts.Prefix)
-	asrt.Equal(DefaultBufferSize, builder.opts.BufferSize)
-	asrt.Equal(DefaultFlushInterval, builder.opts.FlushInterval)
 	asrt.Equal(DefaultEnableSampling, builder.opts.EnableSampling)
 	asrt.Equal(DefaultSampleInitial, builder.opts.SampleInitial)
 	asrt.Equal(DefaultSampleThereafter, builder.opts.SampleThereafter)
@@ -247,14 +237,14 @@ func TestBuilder_BasicMethodChaining(t *testing.T) {
 	builder := NewBuilder().
 		Level("debug").
 		Format("json").
-		Directory("./test_logs").
+		Directory("./logs/test_logs").
 		Filename("test").
 		Prefix("TEST_")
 
 	asrt.NotNil(builder)
 	asrt.Equal("debug", builder.opts.Level)
 	asrt.Equal("json", builder.opts.Format)
-	asrt.Equal("./test_logs", builder.opts.Directory)
+	asrt.Equal("./logs/test_logs", builder.opts.Directory)
 	asrt.Equal("test", builder.opts.Filename)
 	asrt.Equal("TEST_", builder.opts.Prefix)
 }
@@ -264,13 +254,9 @@ func TestBuilder_EnhancedMethodChaining(t *testing.T) {
 	asrt := assert.New(t)
 
 	builder := NewBuilder().
-		BufferSize(2048).
-		FlushInterval(5*time.Second).
 		Sampling(true, 100, 1000)
 
 	asrt.NotNil(builder)
-	asrt.Equal(2048, builder.opts.BufferSize)
-	asrt.Equal(5*time.Second, builder.opts.FlushInterval)
 	asrt.True(builder.opts.EnableSampling)
 	asrt.Equal(100, builder.opts.SampleInitial)
 	asrt.Equal(1000, builder.opts.SampleThereafter)
@@ -293,8 +279,6 @@ func TestBuilder_AllMethodsChaining(t *testing.T) {
 		MaxSize(200).
 		MaxBackups(10).
 		Compress(true).
-		BufferSize(4096).
-		FlushInterval(3*time.Second).
 		Sampling(true, 50, 500)
 
 	opts := builder.opts
@@ -310,8 +294,6 @@ func TestBuilder_AllMethodsChaining(t *testing.T) {
 	asrt.Equal(200, opts.MaxSize)
 	asrt.Equal(10, opts.MaxBackups)
 	asrt.True(opts.Compress)
-	asrt.Equal(4096, opts.BufferSize)
-	asrt.Equal(3*time.Second, opts.FlushInterval)
 	asrt.True(opts.EnableSampling)
 	asrt.Equal(50, opts.SampleInitial)
 	asrt.Equal(500, opts.SampleThereafter)
@@ -352,7 +334,6 @@ func TestBuilder_PresetMethods(t *testing.T) {
 
 			asrt.Equal(tc.expectedLevel, builder.opts.Level)
 			asrt.Equal(tc.expectedFormat, builder.opts.Format)
-			asrt.Equal(tc.expectedBuffer, builder.opts.BufferSize)
 		})
 	}
 }
@@ -363,22 +344,19 @@ func TestBuilder_PresetWithOverrides(t *testing.T) {
 
 	// Apply preset then override specific values
 	builder := NewBuilder().
-		Development().    // Apply development preset
-		Level("error").   // Override level
-		Format("json").   // Override format
-		BufferSize(1024). // Override buffer size
-		MaxSize(300)      // Override max size
+		Development().  // Apply development preset
+		Level("error"). // Override level
+		Format("json"). // Override format
+		MaxSize(300)    // Override max size
 
 	opts := builder.opts
-	asrt.Equal("error", opts.Level)   // Overridden
-	asrt.Equal("json", opts.Format)   // Overridden
-	asrt.Equal(1024, opts.BufferSize) // Overridden
-	asrt.Equal(300, opts.MaxSize)     // Overridden
+	asrt.Equal("error", opts.Level) // Overridden
+	asrt.Equal("json", opts.Format) // Overridden
+	asrt.Equal(300, opts.MaxSize)   // Overridden
 
 	// Values from development preset that weren't overridden
-	asrt.False(opts.DisableCaller)                       // From development preset
-	asrt.False(opts.DisableStacktrace)                   // From development preset
-	asrt.Equal(100*time.Millisecond, opts.FlushInterval) // From development preset
+	asrt.False(opts.DisableCaller)     // From development preset
+	asrt.False(opts.DisableStacktrace) // From development preset
 }
 
 func TestBuilder_MultiplePresets(t *testing.T) {
@@ -397,7 +375,6 @@ func TestBuilder_MultiplePresets(t *testing.T) {
 	asrt.Equal("console", opts.Format)
 	asrt.True(opts.DisableCaller)     // From testing preset
 	asrt.True(opts.DisableStacktrace) // From testing preset
-	asrt.Equal(256, opts.BufferSize)  // From testing preset
 	asrt.Equal(1, opts.MaxSize)       // From testing preset
 }
 
@@ -438,20 +415,16 @@ func TestBuilder_InvalidValues(t *testing.T) {
 
 	// Test that invalid values are handled gracefully
 	builder := NewBuilder().
-		Level("invalid_level").     // Should fallback to default
-		Format("invalid_format").   // Should fallback to default
-		MaxSize(-1).                // Should fallback to default
-		MaxBackups(0).              // Should fallback to default
-		BufferSize(-100).           // Should fallback to default
-		FlushInterval(-time.Second) // Should fallback to default
+		Level("invalid_level").   // Should fallback to default
+		Format("invalid_format"). // Should fallback to default
+		MaxSize(-1).              // Should fallback to default
+		MaxBackups(0)             // Should fallback to default
 
 	opts := builder.opts
 	asrt.Equal(DefaultLevel.String(), opts.Level)
 	asrt.Equal(DefaultFormat, opts.Format)
 	asrt.Equal(DefaultMaxSize, opts.MaxSize)
 	asrt.Equal(DefaultMaxBackups, opts.MaxBackups)
-	asrt.Equal(DefaultBufferSize, opts.BufferSize)
-	asrt.Equal(DefaultFlushInterval, opts.FlushInterval)
 
 	// Should still be able to build a valid logger
 	logger := builder.Build()
@@ -553,65 +526,20 @@ func TestBuilder_TimeLayoutCustomization(t *testing.T) {
 	}
 }
 
-func TestBuilder_FlushIntervalVariations(t *testing.T) {
-	t.Parallel()
-	asrt := assert.New(t)
-
-	intervals := []time.Duration{
-		time.Millisecond,
-		100 * time.Millisecond,
-		time.Second,
-		5 * time.Second,
-		time.Minute,
-		time.Hour,
-	}
-
-	for _, interval := range intervals {
-		t.Run("interval_"+interval.String(), func(t *testing.T) {
-			builder := NewBuilder().FlushInterval(interval)
-			asrt.Equal(interval, builder.opts.FlushInterval)
-		})
-	}
-}
-
-func TestBuilder_BufferSizeVariations(t *testing.T) {
-	t.Parallel()
-	asrt := assert.New(t)
-
-	sizes := []int{
-		1,           // Minimum
-		256,         // Small
-		1024,        // Default
-		4096,        // Medium
-		8192,        // Large
-		65536,       // Very large
-		1024 * 1024, // 1MB
-	}
-
-	for _, size := range sizes {
-		t.Run("size_"+string(rune(size)), func(t *testing.T) {
-			builder := NewBuilder().BufferSize(size)
-			asrt.Equal(size, builder.opts.BufferSize)
-		})
-	}
-}
-
 func TestBuilder_ComplexConfiguration(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
 	// Test a complex, realistic configuration
 	builder := NewBuilder().
-		Production().                  // Start with production preset
-		Level("warn").                 // Override to warn level
-		Directory("/var/log/myapp").   // Custom directory
-		Filename("application").       // Custom filename
-		Prefix("MYAPP_").              // Custom prefix
-		MaxSize(500).                  // Larger files
-		MaxBackups(20).                // More backups
-		BufferSize(8192).              // Larger buffer
-		FlushInterval(10*time.Second). // Less frequent flushing
-		Sampling(true, 1000, 10000)    // Custom sampling
+		Production().                // Start with production preset
+		Level("warn").               // Override to warn level
+		Directory("/var/log/myapp"). // Custom directory
+		Filename("application").     // Custom filename
+		Prefix("MYAPP_").            // Custom prefix
+		MaxSize(500).                // Larger files
+		MaxBackups(20).              // More backups
+		Sampling(true, 1000, 10000)  // Custom sampling
 
 	opts := builder.opts
 
@@ -624,8 +552,6 @@ func TestBuilder_ComplexConfiguration(t *testing.T) {
 	asrt.Equal(500, opts.MaxSize)
 	asrt.Equal(20, opts.MaxBackups)
 	asrt.True(opts.Compress) // From production preset
-	asrt.Equal(8192, opts.BufferSize)
-	asrt.Equal(10*time.Second, opts.FlushInterval)
 	asrt.True(opts.EnableSampling)
 	asrt.Equal(1000, opts.SampleInitial)
 	asrt.Equal(10000, opts.SampleThereafter)
@@ -670,8 +596,6 @@ func TestBuilder_ValidationAfterBuild(t *testing.T) {
 		Format("json").
 		MaxSize(100).
 		MaxBackups(5).
-		BufferSize(1024).
-		FlushInterval(time.Second).
 		Sampling(true, 100, 1000).
 		Build()
 
@@ -694,7 +618,6 @@ func TestBuilder_ThreadSafety(t *testing.T) {
 			logger := NewBuilder().
 				Level("info").
 				Prefix("THREAD_" + string(rune(id)) + "_").
-				BufferSize(1024 + id*100).
 				Build()
 
 			logger.Info("Thread safety test", "goroutine", id)
@@ -739,8 +662,6 @@ func TestBuilder_MethodReturnValues(t *testing.T) {
 	asrt.Same(builder, builder.MaxSize(100))
 	asrt.Same(builder, builder.MaxBackups(5))
 	asrt.Same(builder, builder.Compress(true))
-	asrt.Same(builder, builder.BufferSize(1024))
-	asrt.Same(builder, builder.FlushInterval(time.Second))
 	asrt.Same(builder, builder.Sampling(true, 100, 1000))
 	asrt.Same(builder, builder.Development())
 	asrt.Same(builder, builder.Production())
@@ -753,11 +674,9 @@ func TestBuilder_EdgeCases(t *testing.T) {
 
 	// Test edge cases and boundary values
 	builder := NewBuilder().
-		MaxSize(1).                     // Minimum valid size
-		MaxBackups(1).                  // Minimum valid backups
-		BufferSize(1).                  // Minimum valid buffer
-		FlushInterval(time.Nanosecond). // Minimum valid interval
-		Sampling(true, 1, 1)            // Minimum valid sampling
+		MaxSize(1).          // Minimum valid size
+		MaxBackups(1).       // Minimum valid backups
+		Sampling(true, 1, 1) // Minimum valid sampling
 
 	logger := builder.Build()
 	asrt.NotNil(logger)
@@ -904,36 +823,32 @@ func TestBuilderChainedConfiguration(t *testing.T) {
 
 	// Test complex chained configuration
 	logger := NewBuilder().
-		Production().                 // Start with production preset
-		Level("debug").               // Override level
-		Directory(tempDir).           // Set directory
-		Filename("chained_config").   // Set filename
-		Prefix("CHAIN_").             // Set prefix
-		MaxSize(25).                  // Override max size
-		MaxBackups(2).                // Override max backups
-		Compress(false).              // Override compression
-		BufferSize(1024).             // Set buffer size
-		FlushInterval(2*time.Second). // Set flush interval
-		Sampling(false, 0, 0).        // Disable sampling
-		DisableCaller(false).         // Enable caller info
+		Production().               // Start with production preset
+		Level("debug").             // Override level
+		Directory(tempDir).         // Set directory
+		Filename("chained_config"). // Set filename
+		Prefix("CHAIN_").           // Set prefix
+		MaxSize(25).                // Override max size
+		MaxBackups(2).              // Override max backups
+		Compress(false).            // Override compression
+		Sampling(false, 0, 0).      // Disable sampling
+		DisableCaller(false).       // Enable caller info
 		Build()
 
 	require.NotNil(t, logger)
 
 	// Verify configuration was applied correctly
 	opts := logger.opts
-	assert.Equal(t, "debug", opts.Level)               // Overridden
-	assert.Equal(t, "json", opts.Format)               // From production preset
-	assert.Equal(t, tempDir, opts.Directory)           // Set explicitly
-	assert.Equal(t, "chained_config", opts.Filename)   // Set explicitly
-	assert.Equal(t, "CHAIN_", opts.Prefix)             // Set explicitly
-	assert.Equal(t, 25, opts.MaxSize)                  // Overridden
-	assert.Equal(t, 2, opts.MaxBackups)                // Overridden
-	assert.False(t, opts.Compress)                     // Overridden
-	assert.Equal(t, 1024, opts.BufferSize)             // Set explicitly
-	assert.Equal(t, 2*time.Second, opts.FlushInterval) // Set explicitly
-	assert.False(t, opts.EnableSampling)               // Overridden
-	assert.False(t, opts.DisableCaller)                // Overridden
+	assert.Equal(t, "debug", opts.Level)             // Overridden
+	assert.Equal(t, "json", opts.Format)             // From production preset
+	assert.Equal(t, tempDir, opts.Directory)         // Set explicitly
+	assert.Equal(t, "chained_config", opts.Filename) // Set explicitly
+	assert.Equal(t, "CHAIN_", opts.Prefix)           // Set explicitly
+	assert.Equal(t, 25, opts.MaxSize)                // Overridden
+	assert.Equal(t, 2, opts.MaxBackups)              // Overridden
+	assert.False(t, opts.Compress)                   // Overridden
+	assert.False(t, opts.EnableSampling)             // Overridden
+	assert.False(t, opts.DisableCaller)              // Overridden
 
 	// Test that the logger works
 	logger.Info("Chained configuration test message")
@@ -963,8 +878,6 @@ func TestBuilderBackwardCompatibility(t *testing.T) {
 		MaxSize:          DefaultMaxSize,
 		MaxBackups:       DefaultMaxBackups,
 		Compress:         DefaultCompress,
-		BufferSize:       DefaultBufferSize,
-		FlushInterval:    DefaultFlushInterval,
 		EnableSampling:   DefaultEnableSampling,
 		SampleInitial:    DefaultSampleInitial,
 		SampleThereafter: DefaultSampleThereafter,
@@ -982,4 +895,94 @@ func TestBuilderBackwardCompatibility(t *testing.T) {
 	assert.Equal(t, builderLogger.opts.Level, traditionalLogger.opts.Level)
 	assert.Equal(t, builderLogger.opts.Format, traditionalLogger.opts.Format)
 	assert.Equal(t, builderLogger.opts.Directory, traditionalLogger.opts.Directory)
+}
+
+// ExampleBuilder demonstrates basic usage of the Builder pattern
+func ExampleBuilder() {
+	// Create a logger using the builder pattern with method chaining
+	logger := NewBuilder().
+		Level("debug").
+		Format("console").
+		Directory("./logs").
+		Filename("myapp").
+		Prefix("APP_").
+		Build()
+
+	logger.Info("Application started")
+	logger.Debug("Debug information")
+	logger.Sync()
+}
+
+// ExampleBuilder_presets demonstrates using presets with the builder
+func ExampleBuilder_presets() {
+	// Development environment logger
+	devLogger := NewBuilder().
+		Development().
+		Directory("./dev_logs").
+		Build()
+
+	devLogger.Debug("Development log message")
+
+	// Production environment logger
+	prodLogger := NewBuilder().
+		Production().
+		Directory("./prod_logs").
+		Filename("production").
+		Build()
+
+	prodLogger.Info("Production log message")
+
+	// Testing environment logger
+	testLogger := NewBuilder().
+		Testing().
+		Directory("./logs/test_logs").
+		Build()
+
+	testLogger.Debug("Test log message")
+
+	// Sync all loggers
+	devLogger.Sync()
+	prodLogger.Sync()
+	testLogger.Sync()
+}
+
+// ExampleBuilder_customConfiguration demonstrates advanced configuration
+func ExampleBuilder_customConfiguration() {
+	// Create a temporary directory for this example
+	tempDir := filepath.Join(os.TempDir(), "example_logs")
+	defer os.RemoveAll(tempDir)
+
+	// Custom logger with advanced settings
+	logger := NewBuilder().
+		Level("info").
+		Format("json").
+		Directory(tempDir).
+		Filename("custom").
+		Prefix("CUSTOM_").
+		MaxSize(50).               // 50MB max file size
+		MaxBackups(3).             // Keep 3 backup files
+		Compress(true).            // Compress rotated files
+		Sampling(true, 100, 1000). // Enable sampling
+		DisableCaller(false).      // Show caller info
+		Build()
+
+	logger.Info("Custom configured logger message")
+	logger.Warn("Warning message")
+	logger.Error("Error message")
+	logger.Sync()
+}
+
+// ExampleBuilder_presetWithOverrides demonstrates combining presets with custom settings
+func ExampleBuilder_presetWithOverrides() {
+	// Start with production preset and override specific settings
+	logger := NewBuilder().
+		Production().          // Start with production defaults
+		Level("debug").        // Override to debug level
+		Directory("./custom"). // Override directory
+		DisableCaller(false).  // Enable caller info (overriding production default)
+		Build()
+
+	logger.Debug("Debug message with caller info in production-like setup")
+	logger.Info("Info message")
+	logger.Sync()
 }

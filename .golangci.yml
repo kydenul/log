@@ -103,6 +103,7 @@ linters:
           - gosec
           - cyclop
           - funlen
+          - ineffassign
 
 formatters:
   enable:

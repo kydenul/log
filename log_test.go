@@ -89,7 +89,7 @@ func Test_Log(t *testing.T) {
 }
 
 func TestLoggerWithErrorNilCheck(t *testing.T) {
-	testDir := "./test_logs"
+	testDir := "./logs/test_logs"
 	defer os.RemoveAll(testDir)
 
 	t.Run("DefaultConfig", func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestBufferPoolOptimization(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_pool"
+	testDir := "./logs/test_logs_pool"
 	defer os.RemoveAll(testDir)
 
 	opts := NewOptions().
@@ -155,7 +155,7 @@ func TestAtomicLoggerAccess(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_atomic"
+	testDir := "./logs/test_logs_atomic"
 	defer os.RemoveAll(testDir)
 
 	// Test DefaultLogger access
@@ -184,7 +184,7 @@ func TestConcurrentLoggerAccess(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_concurrent"
+	testDir := "./logs/test_logs_concurrent"
 	defer os.RemoveAll(testDir)
 
 	// Test concurrent access to DefaultLogger
@@ -233,7 +233,7 @@ func TestDateCheckOptimization(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_date"
+	testDir := "./logs/test_logs_date"
 	defer os.RemoveAll(testDir)
 
 	opts := NewOptions().
@@ -265,7 +265,7 @@ func TestFileWriteRetry(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_retry"
+	testDir := "./logs/test_logs_retry"
 	defer os.RemoveAll(testDir)
 
 	opts := NewOptions().
@@ -295,7 +295,7 @@ func TestSetupLogFiles(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_setup"
+	testDir := "./logs/test_logs_setup"
 	defer os.RemoveAll(testDir)
 
 	opts := NewOptions().
@@ -814,7 +814,7 @@ func TestConcurrentMultiInstance_DifferentFilenames(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_concurrent_multi"
+	testDir := "./logs/test_logs_concurrent_multi"
 	defer os.RemoveAll(testDir)
 
 	const numInstances = 5
@@ -875,7 +875,10 @@ func TestConcurrentMultiInstance_DifferentFilenames(t *testing.T) {
 	// Verify that each logger created its own files
 	for i := range numInstances {
 		expectedMainFile := filepath.Join(testDir, fmt.Sprintf("app%d-%s.log", i, time.Now().Format(time.DateOnly)))
-		expectedErrorFile := filepath.Join(testDir, fmt.Sprintf("app%d-%s_error.log", i, time.Now().Format(time.DateOnly)))
+		expectedErrorFile := filepath.Join(
+			testDir,
+			fmt.Sprintf("app%d-%s_error.log", i, time.Now().Format(time.DateOnly)),
+		)
 
 		// Check main log file exists and has content
 		mainInfo, err := os.Stat(expectedMainFile)
@@ -894,7 +897,7 @@ func TestConcurrentMultiInstance_SameFilename(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_concurrent_same"
+	testDir := "./logs/test_logs_concurrent_same"
 	defer os.RemoveAll(testDir)
 
 	const numInstances = 3
@@ -963,7 +966,10 @@ func TestConcurrentMultiInstance_SameFilename(t *testing.T) {
 
 	// Verify that files were created and contain data from all instances
 	expectedMainFile := filepath.Join(testDir, fmt.Sprintf("shared-app-%s.log", time.Now().Format(time.DateOnly)))
-	expectedErrorFile := filepath.Join(testDir, fmt.Sprintf("shared-app-%s_error.log", time.Now().Format(time.DateOnly)))
+	expectedErrorFile := filepath.Join(
+		testDir,
+		fmt.Sprintf("shared-app-%s_error.log", time.Now().Format(time.DateOnly)),
+	)
 
 	// Check main log file
 	mainInfo, err := os.Stat(expectedMainFile)
@@ -992,7 +998,7 @@ func TestConcurrentMultiInstance_ThreadSafety(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_thread_safety"
+	testDir := "./logs/test_logs_thread_safety"
 	defer os.RemoveAll(testDir)
 
 	const numInstances = 4
@@ -1124,7 +1130,7 @@ func TestConcurrentMultiInstance_FileAccessConflicts(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_file_conflicts"
+	testDir := "./logs/test_logs_file_conflicts"
 	defer os.RemoveAll(testDir)
 
 	const numCycles = 10
@@ -1196,7 +1202,10 @@ func TestConcurrentMultiInstance_FileAccessConflicts(t *testing.T) {
 
 	// Verify that files were created and contain expected data
 	expectedMainFile := filepath.Join(testDir, fmt.Sprintf("conflict-test-%s.log", time.Now().Format(time.DateOnly)))
-	expectedErrorFile := filepath.Join(testDir, fmt.Sprintf("conflict-test-%s_error.log", time.Now().Format(time.DateOnly)))
+	expectedErrorFile := filepath.Join(
+		testDir,
+		fmt.Sprintf("conflict-test-%s_error.log", time.Now().Format(time.DateOnly)),
+	)
 
 	// Check main log file
 	mainInfo, err := os.Stat(expectedMainFile)
@@ -1229,7 +1238,7 @@ func TestConcurrentMultiInstance_FilenameSanitization(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_sanitization"
+	testDir := "./logs/test_logs_sanitization"
 	defer os.RemoveAll(testDir)
 
 	// Test various unsafe filenames concurrently
@@ -1340,7 +1349,7 @@ func TestConcurrentMultiInstance_MixedConfigurations(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_mixed_config"
+	testDir := "./logs/test_logs_mixed_config"
 	defer os.RemoveAll(testDir)
 
 	const numInstances = 6
@@ -1482,7 +1491,12 @@ func TestConcurrentMultiInstance_MixedConfigurations(t *testing.T) {
 			contentStr := string(content)
 			if strings.Contains(file.Name(), "_error") {
 				// Error files should contain error messages
-				asrt.Contains(contentStr, "Mixed config error test", "File %s should contain error messages", file.Name())
+				asrt.Contains(
+					contentStr,
+					"Mixed config error test",
+					"File %s should contain error messages",
+					file.Name(),
+				)
 			} else {
 				// Main log files should contain info messages
 				asrt.Contains(contentStr, "Mixed config test", "File %s should contain test messages", file.Name())
@@ -1500,7 +1514,7 @@ func TestSetupLogFilesWithFilename(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_filename"
+	testDir := "./logs/test_logs_filename"
 	defer os.RemoveAll(testDir)
 
 	// Test with custom filename
@@ -1550,7 +1564,7 @@ func TestSetupLogFiles_Integration_CustomFilename(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_integration_custom"
+	testDir := "./logs/test_logs_integration_custom"
 	defer os.RemoveAll(testDir)
 
 	t.Run("CustomFilename_MainAndErrorLogs", func(t *testing.T) {
@@ -1665,7 +1679,7 @@ func TestSetupLogFiles_Integration_FileCreation(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_integration_creation"
+	testDir := "./logs/test_logs_integration_creation"
 	defer os.RemoveAll(testDir)
 
 	t.Run("FileCreation_CorrectNaming", func(t *testing.T) {
@@ -1797,7 +1811,7 @@ func TestSetupLogFiles_Integration_DateChange(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_integration_datechange"
+	testDir := "./logs/test_logs_integration_datechange"
 	defer os.RemoveAll(testDir)
 
 	t.Run("DateChange_FileRotation", func(t *testing.T) {
@@ -1980,7 +1994,7 @@ func TestBackwardCompatibility_DefaultBehavior(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_backward_compat"
+	testDir := "./logs/test_logs_backward_compat"
 	defer os.RemoveAll(testDir)
 
 	// Test 1: Default options without Filename should work exactly as before
@@ -2037,7 +2051,7 @@ func TestBackwardCompatibility_ExistingAPICalls(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_api_compat"
+	testDir := "./logs/test_logs_api_compat"
 	defer os.RemoveAll(testDir)
 
 	// Test 1: Creating logger with nil options (should use defaults)
@@ -2105,7 +2119,8 @@ func TestBackwardCompatibility_ExistingConfigurations(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_config_compat"
+	testDir := "./logs/test_logs_config_compat"
+	os.MkdirAll(testDir, 0o755)
 	defer os.RemoveAll(testDir)
 
 	// Test 1: Configuration without filename field should work
@@ -2174,7 +2189,7 @@ func TestBackwardCompatibility_UpgradeScenarios(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_upgrade_compat"
+	testDir := "./logs/test_logs_upgrade_compat"
 	defer os.RemoveAll(testDir)
 
 	// Simulate upgrade scenario: existing code that doesn't use filename
@@ -2263,7 +2278,7 @@ func TestBackwardCompatibility_MixedUsage(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_mixed_compat"
+	testDir := "./logs/test_logs_mixed_compat"
 	defer os.RemoveAll(testDir)
 
 	// Test scenario: Some loggers use filename, others don't (mixed environment)
@@ -2340,7 +2355,7 @@ func TestBackwardCompatibility_PublicAPI(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	testDir := "./test_logs_api_unchanged"
+	testDir := "./logs/test_logs_api_unchanged"
 	defer os.RemoveAll(testDir)
 
 	// Test that all existing public functions and methods still work
@@ -2645,8 +2660,6 @@ sample_thereafter: 2000
 	asrt.Equal(150, opts.MaxSize)
 	asrt.Equal(8, opts.MaxBackups)
 	asrt.True(opts.Compress)
-	asrt.Equal(4096, opts.BufferSize)
-	asrt.Equal(10*time.Second, opts.FlushInterval)
 	asrt.True(opts.EnableSampling)
 	asrt.Equal(200, opts.SampleInitial)
 	asrt.Equal(2000, opts.SampleThereafter)
@@ -2682,8 +2695,6 @@ format: "console"
 	// Unspecified values should have defaults
 	asrt.Equal(DefaultPrefix, opts.Prefix)
 	asrt.Equal(DefaultDirectory, opts.Directory)
-	asrt.Equal(DefaultBufferSize, opts.BufferSize)
-	asrt.Equal(DefaultFlushInterval, opts.FlushInterval)
 }
 
 func TestLoadFromYAML_InvalidFile(t *testing.T) {
@@ -2816,14 +2827,14 @@ func TestWithPreset(t *testing.T) {
 		name   string
 		preset Preset
 	}{
-		{"Development", DevelopmentPreset()},
-		{"Production", ProductionPreset()},
-		{"Testing", TestingPreset()},
+		{"Development", *DevelopmentPreset()},
+		{"Production", *ProductionPreset()},
+		{"Testing", *TestingPreset()},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := WithPreset(tt.preset)
+			logger := WithPreset(&tt.preset)
 			if logger == nil {
 				t.Fatalf("WithPreset(%s) returned nil logger", tt.name)
 			}
@@ -2921,8 +2932,6 @@ sample_thereafter: 500
 	asrt.Equal(100, logger.opts.MaxSize)
 	asrt.Equal(5, logger.opts.MaxBackups)
 	asrt.False(logger.opts.Compress)
-	asrt.Equal(4096, logger.opts.BufferSize)
-	asrt.Equal(1*time.Second, logger.opts.FlushInterval)
 	asrt.False(logger.opts.EnableSampling)
 	asrt.Equal(100, logger.opts.SampleInitial)
 	asrt.Equal(500, logger.opts.SampleThereafter)
@@ -3054,15 +3063,6 @@ func TestDevelopmentPreset(t *testing.T) {
 		t.Error("Expected Compress to be false in development")
 	}
 
-	// Verify enhanced settings
-	if opts.BufferSize != 512 {
-		t.Errorf("Expected BufferSize 512, got %d", opts.BufferSize)
-	}
-
-	if opts.FlushInterval != 100*time.Millisecond {
-		t.Errorf("Expected FlushInterval 100ms, got %v", opts.FlushInterval)
-	}
-
 	if opts.EnableSampling != false {
 		t.Error("Expected EnableSampling to be false in development")
 	}
@@ -3115,15 +3115,6 @@ func TestProductionPreset(t *testing.T) {
 
 	if opts.Compress != true {
 		t.Error("Expected Compress to be true in production")
-	}
-
-	// Verify enhanced settings
-	if opts.BufferSize != 2048 {
-		t.Errorf("Expected BufferSize 2048, got %d", opts.BufferSize)
-	}
-
-	if opts.FlushInterval != 5*time.Second {
-		t.Errorf("Expected FlushInterval 5s, got %v", opts.FlushInterval)
 	}
 
 	if opts.EnableSampling != true {
@@ -3186,15 +3177,6 @@ func TestTestingPreset(t *testing.T) {
 
 	if opts.Compress != false {
 		t.Error("Expected Compress to be false in testing")
-	}
-
-	// Verify enhanced settings
-	if opts.BufferSize != 256 {
-		t.Errorf("Expected BufferSize 256, got %d", opts.BufferSize)
-	}
-
-	if opts.FlushInterval != 50*time.Millisecond {
-		t.Errorf("Expected FlushInterval 50ms, got %v", opts.FlushInterval)
 	}
 
 	if opts.EnableSampling != false {
@@ -3362,9 +3344,9 @@ func TestPresetOptionsValidation(t *testing.T) {
 		name   string
 		preset Preset
 	}{
-		{"Development", DevelopmentPreset()},
-		{"Production", ProductionPreset()},
-		{"Testing", TestingPreset()},
+		{"Development", *DevelopmentPreset()},
+		{"Production", *ProductionPreset()},
+		{"Testing", *TestingPreset()},
 	}
 
 	for _, tc := range presets {
@@ -3377,4 +3359,191 @@ func TestPresetOptionsValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCoreLoggerFunctionality(t *testing.T) {
+	t.Parallel()
+
+	t.Run("basic logger creation", func(t *testing.T) {
+		logger := NewLog(nil)
+		assert.NotNil(t, logger)
+		assert.NotNil(t, logger.log)
+	})
+
+	t.Run("builder pattern", func(t *testing.T) {
+		logger := NewBuilder().
+			Level("debug").
+			Format("console").
+			Directory("./logs/test_logs").
+			Filename("test").
+			Build()
+
+		assert.NotNil(t, logger)
+		assert.Equal(t, "debug", logger.opts.Level)
+		assert.Equal(t, "console", logger.opts.Format)
+	})
+
+	t.Run("sampling configuration", func(t *testing.T) {
+		logger := NewBuilder().
+			Sampling(true, 50, 200).
+			Build()
+
+		assert.NotNil(t, logger)
+		assert.True(t, logger.opts.EnableSampling)
+		assert.Equal(t, 50, logger.opts.SampleInitial)
+		assert.Equal(t, 200, logger.opts.SampleThereafter)
+	})
+
+	t.Run("presets", func(t *testing.T) {
+		devLogger := WithPreset(DevelopmentPreset())
+		assert.NotNil(t, devLogger)
+		assert.False(t, devLogger.opts.EnableSampling)
+
+		prodLogger := WithPreset(ProductionPreset())
+		assert.NotNil(t, prodLogger)
+		assert.True(t, prodLogger.opts.EnableSampling)
+	})
+
+	t.Run("basic logging operations", func(t *testing.T) {
+		logger := NewBuilder().
+			Level("debug").
+			Directory("./logs/test_logs").
+			Build()
+
+		// Test all log levels
+		logger.Debug("Debug message")
+		logger.Info("Info message")
+		logger.Warn("Warning message")
+		logger.Error("Error message")
+
+		// Test formatted logging
+		logger.Debugf("Debug: %s", "formatted")
+		logger.Infof("Info: %d", 42)
+
+		// Test structured logging
+		logger.Debugw("Structured debug", "key", "value")
+		logger.Infow("Structured info", "number", 123)
+
+		logger.Sync()
+	})
+}
+
+func TestSamplingFunctionality(t *testing.T) {
+	t.Parallel()
+
+	t.Run("sampling disabled by default", func(t *testing.T) {
+		opts := NewOptions()
+		assert.False(t, opts.EnableSampling)
+		assert.Equal(t, DefaultSampleInitial, opts.SampleInitial)
+		assert.Equal(t, DefaultSampleThereafter, opts.SampleThereafter)
+	})
+
+	t.Run("sampling configuration", func(t *testing.T) {
+		opts := NewOptions()
+		opts.WithSampling(true, 50, 200)
+
+		assert.True(t, opts.EnableSampling)
+		assert.Equal(t, 50, opts.SampleInitial)
+		assert.Equal(t, 200, opts.SampleThereafter)
+	})
+
+	t.Run("sampling with builder", func(t *testing.T) {
+		logger := NewBuilder().
+			Level("debug").
+			Sampling(true, 100, 500).
+			Build()
+
+		assert.NotNil(t, logger)
+		assert.True(t, logger.opts.EnableSampling)
+		assert.Equal(t, 100, logger.opts.SampleInitial)
+		assert.Equal(t, 500, logger.opts.SampleThereafter)
+	})
+
+	t.Run("sampling validation", func(t *testing.T) {
+		opts := NewOptions()
+		opts.EnableSampling = true
+		opts.SampleInitial = -1    // Invalid
+		opts.SampleThereafter = -1 // Invalid
+
+		err := opts.Validate()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "sample initial")
+	})
+
+	t.Run("production preset enables sampling", func(t *testing.T) {
+		opts := NewOptions()
+		ProductionPreset().Apply(opts)
+
+		assert.True(t, opts.EnableSampling)
+		assert.Equal(t, 100, opts.SampleInitial)
+		assert.Equal(t, 1000, opts.SampleThereafter)
+	})
+
+	t.Run("development preset disables sampling", func(t *testing.T) {
+		opts := NewOptions()
+		DevelopmentPreset().Apply(opts)
+
+		assert.False(t, opts.EnableSampling)
+	})
+
+	t.Run("logger creation with sampling", func(t *testing.T) {
+		opts := NewOptions()
+		opts.EnableSampling = true
+		opts.SampleInitial = 10
+		opts.SampleThereafter = 100
+
+		logger := NewLog(opts)
+		assert.NotNil(t, logger)
+		assert.NotNil(t, logger.log)
+
+		// Test that logger can handle multiple log calls
+		// (sampling behavior is internal to zap, we just verify it doesn't crash)
+		for i := range 200 {
+			logger.Info("Test message", i)
+		}
+	})
+}
+
+func TestSamplingIntegration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("high frequency logging with sampling", func(t *testing.T) {
+		logger := NewBuilder().
+			Level("info").
+			Directory("./logs/test_logs").
+			Filename("sampling-test").
+			Sampling(true, 2, 1000). // Allow 2 initial, then 1 every 1000
+			Build()
+
+		// Generate many log messages quickly
+		start := time.Now()
+		for i := range 50 {
+			logger.Infof("High frequency message %d", i)
+		}
+		duration := time.Since(start)
+
+		// Sampling should make this very fast
+		assert.Less(t, duration, time.Second, "Sampling should make logging fast")
+
+		logger.Sync()
+	})
+
+	t.Run("sampling with different log levels", func(t *testing.T) {
+		logger := NewBuilder().
+			Level("debug").
+			Directory("./logs/test_logs").
+			Filename("sampling-levels").
+			Sampling(true, 3, 5).
+			Build()
+
+		// Test different log levels with sampling
+		for i := range 20 {
+			logger.Debug("Debug message", i)
+			logger.Info("Info message", i)
+			logger.Warn("Warn message", i)
+			logger.Error("Error message", i)
+		}
+
+		logger.Sync()
+	})
 }

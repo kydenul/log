@@ -31,8 +31,7 @@ func main() {
 		Format("console").
 		Directory("./logs").
 		Filename("simple-example").
-		BufferSize(1024).
-		FlushInterval(time.Second).
+		Sampling(true, 100, 1000).
 		Build()
 
 	builderLogger.Info("Logger created with builder pattern")

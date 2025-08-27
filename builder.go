@@ -1,7 +1,5 @@
 package log
 
-import "time"
-
 // Builder provides a fluent interface for configuring and creating Log instances
 // It wraps the existing Options struct and provides chainable methods for configuration
 type Builder struct{ opts *Options }
@@ -93,20 +91,6 @@ func (b *Builder) MaxBackups(backups int) *Builder {
 // Returns the Builder for method chaining
 func (b *Builder) Compress(compress bool) *Builder {
 	b.opts.WithCompress(compress) // Use existing method
-	return b
-}
-
-// BufferSize sets the buffer size for log writes
-// Returns the Builder for method chaining
-func (b *Builder) BufferSize(size int) *Builder {
-	b.opts.WithBufferSize(size) // Use existing method
-	return b
-}
-
-// FlushInterval sets the interval for flushing buffered logs
-// Returns the Builder for method chaining
-func (b *Builder) FlushInterval(interval time.Duration) *Builder {
-	b.opts.WithFlushInterval(interval) // Use existing method
 	return b
 }
 

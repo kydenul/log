@@ -11,7 +11,7 @@ func TestConfigError(t *testing.T) {
 	tests := []struct {
 		name     string
 		field    string
-		value    interface{}
+		value    any
 		reason   string
 		wrapped  error
 		expected string
@@ -119,21 +119,7 @@ func TestValidateOptions(t *testing.T) {
 				return opts.MaxSize == DefaultMaxSize
 			},
 		},
-		{
-			name: "invalid buffer size",
-			input: &Options{
-				Level:      DefaultLevel.String(),
-				Directory:  DefaultDirectory,
-				Format:     DefaultFormat,
-				MaxSize:    DefaultMaxSize,
-				MaxBackups: DefaultMaxBackups,
-				BufferSize: -1,
-			},
-			expectError: true,
-			checkField: func(opts *Options) bool {
-				return opts.BufferSize == DefaultBufferSize
-			},
-		},
+
 		{
 			name: "invalid sampling config",
 			input: &Options{
@@ -421,7 +407,11 @@ func TestValidateSampling(t *testing.T) {
 			}
 
 			if opts.SampleThereafter != tt.expectedSampleThereafter {
-				t.Errorf("validateSampling() sampleThereafter = %v, want %v", opts.SampleThereafter, tt.expectedSampleThereafter)
+				t.Errorf(
+					"validateSampling() sampleThereafter = %v, want %v",
+					opts.SampleThereafter,
+					tt.expectedSampleThereafter,
+				)
 			}
 		})
 	}

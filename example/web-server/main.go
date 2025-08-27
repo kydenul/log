@@ -175,7 +175,7 @@ func main() {
 	case "production":
 		logger = log.NewBuilder().
 			Production().
-			Directory("/var/log/web-server").
+			Directory("./logs").
 			MaxSize(100).
 			MaxBackups(10).
 			Build()

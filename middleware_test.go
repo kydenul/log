@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -66,7 +67,7 @@ func (m *mockLogger) Infow(msg string, keysAndValues ...any) {
 	m.messages = append(m.messages, msg)
 
 	// Convert keysAndValues to map
-	fields := make(map[string]interface{})
+	fields := make(map[string]any)
 	for i := 0; i < len(keysAndValues); i += 2 {
 		if i+1 < len(keysAndValues) {
 			key := keysAndValues[i].(string)
@@ -315,4 +316,36 @@ func TestHTTPMiddleware_WithRealLogger(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "OK") {
 		t.Errorf("Expected response body to contain 'OK', got '%s'", rr.Body.String())
 	}
+}
+
+// ExampleHTTPMiddleware_usage shows how to use the HTTP middleware with a real HTTP server
+func ExampleHTTPMiddleware_usage() {
+	// Create logger
+	logger := NewLog(NewOptions())
+
+	// Create your handlers
+	helloHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Hello!"))
+	})
+
+	apiHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"message": "API response"}`))
+	})
+
+	// Create middleware
+	middleware := HTTPMiddleware(logger)
+
+	// Set up routes with middleware
+	mux := http.NewServeMux()
+	mux.Handle("/hello", middleware(helloHandler))
+	mux.Handle("/api/", middleware(apiHandler))
+
+	// In a real application, you would start the server like this:
+	// log.Fatal(http.ListenAndServe(":8080", mux))
+
+	fmt.Println("Server configured with logging middleware")
+	// Output: Server configured with logging middleware
 }

@@ -31,7 +31,7 @@ func (e *ConfigError) Unwrap() error {
 }
 
 // NewConfigError creates a new ConfigError with the specified details
-func NewConfigError(field string, value interface{}, reason string, wrapped error) *ConfigError {
+func NewConfigError(field string, value any, reason string, wrapped error) *ConfigError {
 	return &ConfigError{
 		Field:   field,
 		Value:   value,
@@ -42,17 +42,16 @@ func NewConfigError(field string, value interface{}, reason string, wrapped erro
 
 // Predefined error variables for common configuration errors
 var (
-	ErrInvalidLevel         = errors.New("无效的日志级别")
-	ErrInvalidFormat        = errors.New("无效的日志格式")
-	ErrInvalidDirectory     = errors.New("无效的日志目录")
-	ErrInvalidFilename      = errors.New("无效的文件名")
-	ErrPermissionDenied     = errors.New("权限被拒绝")
-	ErrInvalidTimeLayout    = errors.New("无效的时间格式")
-	ErrInvalidMaxSize       = errors.New("无效的最大文件大小")
-	ErrInvalidMaxBackups    = errors.New("无效的最大备份数量")
-	ErrInvalidBufferSize    = errors.New("无效的缓冲区大小")
-	ErrInvalidFlushInterval = errors.New("无效的刷新间隔")
-	ErrInvalidSampling      = errors.New("无效的采样配置")
+	ErrInvalidLevel      = errors.New("无效的日志级别")
+	ErrInvalidFormat     = errors.New("无效的日志格式")
+	ErrInvalidDirectory  = errors.New("无效的日志目录")
+	ErrInvalidFilename   = errors.New("无效的文件名")
+	ErrPermissionDenied  = errors.New("权限被拒绝")
+	ErrInvalidTimeLayout = errors.New("无效的时间格式")
+	ErrInvalidMaxSize    = errors.New("无效的最大文件大小")
+	ErrInvalidMaxBackups = errors.New("无效的最大备份数量")
+
+	ErrInvalidSampling = errors.New("无效的采样配置")
 )
 
 // ValidateOptions validates configuration options and returns a fixed configuration
@@ -96,14 +95,6 @@ func ValidateOptions(opts *Options) (*Options, error) {
 		errs = append(errs, err)
 	}
 
-	if err := validateBufferSize(&fixed); err != nil {
-		errs = append(errs, err)
-	}
-
-	if err := validateFlushInterval(&fixed); err != nil {
-		errs = append(errs, err)
-	}
-
 	if err := validateSampling(&fixed); err != nil {
 		errs = append(errs, err)
 	}
@@ -128,10 +119,10 @@ func validateLevel(opts *Options) error {
 
 // validateFormat validates and fixes the log format
 func validateFormat(opts *Options) error {
-	if opts.Format != "console" && opts.Format != "json" {
+	if opts.Format != FormatConsole && opts.Format != FormatJSON {
 		originalValue := opts.Format
 		opts.Format = DefaultFormat
-		return NewConfigError("Format", originalValue, "使用默认格式 "+DefaultFormat, ErrInvalidFormat)
+		return NewConfigError("Format", originalValue, "Use Default Log Format "+DefaultFormat, ErrInvalidFormat)
 	}
 	return nil
 }
@@ -140,15 +131,17 @@ func validateFormat(opts *Options) error {
 func validateDirectory(opts *Options) error {
 	if opts.Directory == "" {
 		opts.Directory = DefaultDirectory
-		return NewConfigError("Directory", "", "使用默认目录 "+DefaultDirectory, ErrInvalidDirectory)
+		return NewConfigError("Directory", "", "Use default directory "+DefaultDirectory, ErrInvalidDirectory)
 	}
 
 	// Check if directory is accessible
 	if err := ensureDirectoryExists(opts.Directory); err != nil {
 		originalValue := opts.Directory
 		opts.Directory = DefaultDirectory
-		return NewConfigError("Directory", originalValue, "目录不可访问，使用默认目录",
-			fmt.Errorf("%w: %v", ErrPermissionDenied, err))
+		return NewConfigError("Directory", originalValue,
+			"Can't access to directory, use default directory",
+			fmt.Errorf("%w: %v", ErrPermissionDenied, err),
+		)
 	}
 
 	return nil
@@ -160,13 +153,16 @@ func validateFilename(opts *Options) error {
 		sanitized := sanitizeFilename(opts.Filename)
 		if sanitized == "" {
 			originalValue := opts.Filename
-			opts.Filename = ""
-			return NewConfigError("Filename", originalValue, "文件名包含非法字符，使用默认文件名", ErrInvalidFilename)
+			opts.Filename = DefaultFilename
+			return NewConfigError("Filename", originalValue,
+				"The filename contains illegal characters and is set to default filename: "+DefaultFilename,
+				ErrInvalidFilename)
 		}
 		if sanitized != opts.Filename {
 			originalValue := opts.Filename
 			opts.Filename = sanitized
-			return NewConfigError("Filename", originalValue, "文件名已清理: "+sanitized, ErrInvalidFilename)
+			return NewConfigError("Filename", originalValue,
+				"The filename is sanitized: "+sanitized, ErrInvalidFilename)
 		}
 	}
 	return nil
@@ -220,36 +216,6 @@ func validateMaxBackups(opts *Options) error {
 	return nil
 }
 
-// validateBufferSize validates and fixes the buffer size
-func validateBufferSize(opts *Options) error {
-	if opts.BufferSize < 0 {
-		originalValue := opts.BufferSize
-		opts.BufferSize = DefaultBufferSize
-		return NewConfigError(
-			"BufferSize",
-			originalValue,
-			fmt.Sprintf("使用默认缓冲区大小 %d", DefaultBufferSize),
-			ErrInvalidBufferSize,
-		)
-	}
-	return nil
-}
-
-// validateFlushInterval validates and fixes the flush interval
-func validateFlushInterval(opts *Options) error {
-	if opts.FlushInterval < 0 {
-		originalValue := opts.FlushInterval
-		opts.FlushInterval = DefaultFlushInterval
-		return NewConfigError(
-			"FlushInterval",
-			originalValue,
-			fmt.Sprintf("使用默认刷新间隔 %v", DefaultFlushInterval),
-			ErrInvalidFlushInterval,
-		)
-	}
-	return nil
-}
-
 // validateSampling validates and fixes the sampling configuration
 func validateSampling(opts *Options) error {
 	if opts.EnableSampling {
@@ -288,17 +254,17 @@ func ensureDirectoryExists(dir string) error {
 		}
 		// Check if we can write to the directory
 		testFile := filepath.Join(dir, ".write_test")
-		if f, err := os.Create(testFile); err != nil {
+		if f, err := os.Create(testFile); err != nil { //nolint:gosec
 			return fmt.Errorf("目录不可写: %s", dir)
 		} else {
-			f.Close()
-			os.Remove(testFile)
+			f.Close()           //nolint:gosec
+			os.Remove(testFile) //nolint:gosec
 		}
 		return nil
 	}
 
 	// Try to create the directory
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec
 		return fmt.Errorf("无法创建目录: %s: %v", dir, err)
 	}
 

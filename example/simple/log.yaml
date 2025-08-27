@@ -1,5 +1,5 @@
 # Simple example YAML configuration for log library
-filename: "myapp"        # Log filename prefix (generates files like myapp-2025-07-20.log)
+filename: "ziwi"        # Log filename prefix (generates files like ziwi-2025-07-20.log)
 prefix: "LOG_"           # Log prefix
 directory: "./logs"      # Log file directory
 level: "debug"           # Log level: debug / info / warn / error / dpanic / panic / fatal

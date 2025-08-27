@@ -57,7 +57,6 @@ prefix: "TEST_"
 		assert.Equal(t, 50, opts.MaxSize)
 		assert.Equal(t, 2, opts.MaxBackups)
 		assert.True(t, opts.Compress)
-		assert.Equal(t, 2048, opts.BufferSize)
 		assert.True(t, opts.EnableSampling)
 		assert.Equal(t, 200, opts.SampleInitial)
 		assert.Equal(t, 500, opts.SampleThereafter)
@@ -323,7 +322,7 @@ func TestHTTPMiddlewareIntegration(t *testing.T) {
 					continue
 				}
 
-				var logEntry map[string]interface{}
+				var logEntry map[string]any
 				if err := json.Unmarshal([]byte(line), &logEntry); err == nil {
 					if msg, ok := logEntry["msg"].(string); ok && msg == "HTTP请求完成" {
 						if statusCode, ok := logEntry["status_code"].(float64); ok {
@@ -613,8 +612,6 @@ func TestBackwardCompatibility(t *testing.T) {
 		require.NotNil(t, opts)
 
 		// Verify new fields have default values
-		assert.Equal(t, DefaultBufferSize, opts.BufferSize)
-		assert.Equal(t, DefaultFlushInterval, opts.FlushInterval)
 		assert.Equal(t, DefaultEnableSampling, opts.EnableSampling)
 		assert.Equal(t, DefaultSampleInitial, opts.SampleInitial)
 		assert.Equal(t, DefaultSampleThereafter, opts.SampleThereafter)
@@ -639,17 +636,13 @@ func TestBackwardCompatibility(t *testing.T) {
 			WithDirectory(tempDir).
 			WithFilename("optional_new_methods").
 			WithLevel("info").
-			WithBufferSize(2048).             // New method
-			WithFlushInterval(2*time.Second). // New method
-			WithSampling(true, 50, 200).      // New method
+			WithSampling(true, 50, 200). // New method
 			WithFormat("json")
 
 		require.NotNil(t, opts)
 		require.NoError(t, opts.Validate())
 
 		// Verify new fields were set
-		assert.Equal(t, 2048, opts.BufferSize)
-		assert.Equal(t, 2*time.Second, opts.FlushInterval)
 		assert.True(t, opts.EnableSampling)
 		assert.Equal(t, 50, opts.SampleInitial)
 		assert.Equal(t, 200, opts.SampleThereafter)
@@ -720,8 +713,6 @@ compress: false
 		assert.False(t, opts.Compress)
 
 		// Verify new fields have default values
-		assert.Equal(t, DefaultBufferSize, opts.BufferSize)
-		assert.Equal(t, DefaultFlushInterval, opts.FlushInterval)
 		assert.Equal(t, DefaultEnableSampling, opts.EnableSampling)
 
 		// Create logger and test it works
@@ -917,7 +908,7 @@ flush_interval: 1s
 				if strings.Contains(line, "{") {
 					jsonStart := strings.Index(line, "{")
 					jsonPart := line[jsonStart:]
-					var logEntry map[string]interface{}
+					var logEntry map[string]any
 					if json.Unmarshal([]byte(jsonPart), &logEntry) == nil {
 						jsonLogCount++
 					}

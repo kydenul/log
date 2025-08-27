@@ -3,7 +3,6 @@ package log
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zapcore"
@@ -28,8 +27,6 @@ func Test_NewOptions(t *testing.T) {
 	asrt.Equal(DefaultCompress, opt.Compress)
 
 	// Test new enhanced functionality fields
-	asrt.Equal(DefaultBufferSize, opt.BufferSize)
-	asrt.Equal(DefaultFlushInterval, opt.FlushInterval)
 	asrt.Equal(DefaultEnableSampling, opt.EnableSampling)
 	asrt.Equal(DefaultSampleInitial, opt.SampleInitial)
 	asrt.Equal(DefaultSampleThereafter, opt.SampleThereafter)
@@ -667,49 +664,6 @@ func Test_DefaultFilename(t *testing.T) {
 	asrt.Equal(DefaultFilename, opts.Filename)
 }
 
-// Test new enhanced functionality methods
-func Test_Options_WithBufferSize(t *testing.T) {
-	t.Parallel()
-	asrt := assert.New(t)
-
-	// Test setting valid buffer size
-	opt := NewOptions().WithBufferSize(2048)
-	asrt.Equal(2048, opt.BufferSize)
-
-	// Test setting another valid buffer size
-	opt = NewOptions().WithBufferSize(512)
-	asrt.Equal(512, opt.BufferSize)
-
-	// Test setting zero buffer size - should use default
-	opt = NewOptions().WithBufferSize(0)
-	asrt.Equal(DefaultBufferSize, opt.BufferSize)
-
-	// Test setting negative buffer size - should use default
-	opt = NewOptions().WithBufferSize(-100)
-	asrt.Equal(DefaultBufferSize, opt.BufferSize)
-}
-
-func Test_Options_WithFlushInterval(t *testing.T) {
-	t.Parallel()
-	asrt := assert.New(t)
-
-	// Test setting valid flush interval
-	opt := NewOptions().WithFlushInterval(5 * time.Second)
-	asrt.Equal(5*time.Second, opt.FlushInterval)
-
-	// Test setting another valid flush interval
-	opt = NewOptions().WithFlushInterval(100 * time.Millisecond)
-	asrt.Equal(100*time.Millisecond, opt.FlushInterval)
-
-	// Test setting zero flush interval - should use default
-	opt = NewOptions().WithFlushInterval(0)
-	asrt.Equal(DefaultFlushInterval, opt.FlushInterval)
-
-	// Test setting negative flush interval - should use default
-	opt = NewOptions().WithFlushInterval(-time.Second)
-	asrt.Equal(DefaultFlushInterval, opt.FlushInterval)
-}
-
 func Test_Options_WithSampling(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
@@ -764,25 +718,9 @@ func Test_Options_Validate_Enhanced_Fields(t *testing.T) {
 
 	// Test valid options with new fields
 	validOpts := NewOptions().
-		WithBufferSize(2048).
-		WithFlushInterval(5*time.Second).
 		WithSampling(true, 50, 200)
 	err := validOpts.Validate()
 	asrt.NoError(err)
-
-	// Test invalid buffer size
-	invalidBufferOpts := NewOptions()
-	invalidBufferOpts.BufferSize = -1
-	err = invalidBufferOpts.Validate()
-	asrt.Error(err)
-	asrt.Contains(err.Error(), "invalid buffer size")
-
-	// Test invalid flush interval
-	invalidFlushOpts := NewOptions()
-	invalidFlushOpts.FlushInterval = -time.Second
-	err = invalidFlushOpts.Validate()
-	asrt.Error(err)
-	asrt.Contains(err.Error(), "invalid flush interval")
 
 	// Test invalid sample initial when sampling is enabled
 	invalidSampleInitialOpts := NewOptions()
@@ -821,8 +759,6 @@ func Test_Options_ChainedValidation_Enhanced(t *testing.T) {
 		WithFilename("myapp").
 		WithLevel("debug").
 		WithFormat("json").
-		WithBufferSize(4096).
-		WithFlushInterval(2*time.Second).
 		WithSampling(true, 25, 500).
 		WithMaxSize(200).
 		WithMaxBackups(10).
@@ -834,8 +770,6 @@ func Test_Options_ChainedValidation_Enhanced(t *testing.T) {
 	asrt.Equal("myapp", opts.Filename)
 	asrt.Equal("debug", opts.Level)
 	asrt.Equal("json", opts.Format)
-	asrt.Equal(4096, opts.BufferSize)
-	asrt.Equal(2*time.Second, opts.FlushInterval)
 	asrt.True(opts.EnableSampling)
 	asrt.Equal(25, opts.SampleInitial)
 	asrt.Equal(500, opts.SampleThereafter)
@@ -854,16 +788,12 @@ func Test_DefaultConstants_Enhanced(t *testing.T) {
 	asrt := assert.New(t)
 
 	// Test that default constants are reasonable
-	asrt.Equal(1024, DefaultBufferSize)
-	asrt.Equal(time.Second, DefaultFlushInterval)
 	asrt.False(DefaultEnableSampling)
 	asrt.Equal(100, DefaultSampleInitial)
 	asrt.Equal(100, DefaultSampleThereafter)
 
 	// Test that NewOptions uses these defaults
 	opts := NewOptions()
-	asrt.Equal(DefaultBufferSize, opts.BufferSize)
-	asrt.Equal(DefaultFlushInterval, opts.FlushInterval)
 	asrt.Equal(DefaultEnableSampling, opts.EnableSampling)
 	asrt.Equal(DefaultSampleInitial, opts.SampleInitial)
 	asrt.Equal(DefaultSampleThereafter, opts.SampleThereafter)
@@ -874,16 +804,9 @@ func Test_Options_Enhanced_EdgeCases(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
-	// Test very large buffer size
-	opt := NewOptions().WithBufferSize(1024 * 1024) // 1MB
-	asrt.Equal(1024*1024, opt.BufferSize)
+	// Test basic validation
+	opt := NewOptions()
 	err := opt.Validate()
-	asrt.NoError(err)
-
-	// Test very small flush interval
-	opt = NewOptions().WithFlushInterval(time.Nanosecond)
-	asrt.Equal(time.Nanosecond, opt.FlushInterval)
-	err = opt.Validate()
 	asrt.NoError(err)
 
 	// Test very large sample values
@@ -895,8 +818,6 @@ func Test_Options_Enhanced_EdgeCases(t *testing.T) {
 	asrt.NoError(err)
 
 	// Test boundary values
-	opt = NewOptions().WithBufferSize(1) // Minimum valid buffer size
-	asrt.Equal(1, opt.BufferSize)
 	err = opt.Validate()
 	asrt.NoError(err)
 
@@ -917,59 +838,9 @@ func TestOptions_EnhancedFields_Defaults(t *testing.T) {
 	asrt.NotNil(opts)
 
 	// Test that enhanced fields have correct default values
-	asrt.Equal(DefaultBufferSize, opts.BufferSize)
-	asrt.Equal(DefaultFlushInterval, opts.FlushInterval)
 	asrt.Equal(DefaultEnableSampling, opts.EnableSampling)
 	asrt.Equal(DefaultSampleInitial, opts.SampleInitial)
 	asrt.Equal(DefaultSampleThereafter, opts.SampleThereafter)
-}
-
-func TestOptions_WithBufferSize_ValidValues(t *testing.T) {
-	t.Parallel()
-	asrt := assert.New(t)
-
-	testCases := []struct {
-		name     string
-		input    int
-		expected int
-	}{
-		{"positive value", 2048, 2048},
-		{"small positive value", 1, 1},
-		{"large value", 1024 * 1024, 1024 * 1024},
-		{"zero value uses default", 0, DefaultBufferSize},
-		{"negative value uses default", -100, DefaultBufferSize},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			opts := NewOptions().WithBufferSize(tc.input)
-			asrt.Equal(tc.expected, opts.BufferSize)
-		})
-	}
-}
-
-func TestOptions_WithFlushInterval_ValidValues(t *testing.T) {
-	t.Parallel()
-	asrt := assert.New(t)
-
-	testCases := []struct {
-		name     string
-		input    time.Duration
-		expected time.Duration
-	}{
-		{"positive duration", 5 * time.Second, 5 * time.Second},
-		{"small duration", time.Nanosecond, time.Nanosecond},
-		{"large duration", time.Hour, time.Hour},
-		{"zero duration uses default", 0, DefaultFlushInterval},
-		{"negative duration uses default", -time.Second, DefaultFlushInterval},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			opts := NewOptions().WithFlushInterval(tc.input)
-			asrt.Equal(tc.expected, opts.FlushInterval)
-		})
-	}
 }
 
 func TestOptions_WithSampling_ValidValues(t *testing.T) {
@@ -1038,26 +909,10 @@ func TestOptions_Validate_EnhancedFields(t *testing.T) {
 
 	// Test valid enhanced fields
 	validOpts := NewOptions().
-		WithBufferSize(2048).
-		WithFlushInterval(5*time.Second).
 		WithSampling(true, 50, 200)
 
 	err := validOpts.Validate()
 	asrt.NoError(err)
-
-	// Test invalid buffer size
-	invalidBufferOpts := NewOptions()
-	invalidBufferOpts.BufferSize = -1
-	err = invalidBufferOpts.Validate()
-	asrt.Error(err)
-	asrt.Contains(err.Error(), "invalid buffer size")
-
-	// Test invalid flush interval
-	invalidFlushOpts := NewOptions()
-	invalidFlushOpts.FlushInterval = -time.Second
-	err = invalidFlushOpts.Validate()
-	asrt.Error(err)
-	asrt.Contains(err.Error(), "invalid flush interval")
 
 	// Test invalid sample initial when sampling enabled
 	invalidSampleInitialOpts := NewOptions()
@@ -1090,12 +945,8 @@ func TestOptions_EnhancedFields_MethodChaining(t *testing.T) {
 
 	// Test chaining all enhanced methods
 	opts := NewOptions().
-		WithBufferSize(4096).
-		WithFlushInterval(2*time.Second).
 		WithSampling(true, 25, 500)
 
-	asrt.Equal(4096, opts.BufferSize)
-	asrt.Equal(2*time.Second, opts.FlushInterval)
 	asrt.True(opts.EnableSampling)
 	asrt.Equal(25, opts.SampleInitial)
 	asrt.Equal(500, opts.SampleThereafter)
@@ -1104,15 +955,11 @@ func TestOptions_EnhancedFields_MethodChaining(t *testing.T) {
 	opts = NewOptions().
 		WithLevel("debug").
 		WithFormat("json").
-		WithBufferSize(1024).
-		WithFlushInterval(time.Second).
 		WithSampling(false, 100, 1000).
 		WithMaxSize(200)
 
 	asrt.Equal("debug", opts.Level)
 	asrt.Equal("json", opts.Format)
-	asrt.Equal(1024, opts.BufferSize)
-	asrt.Equal(time.Second, opts.FlushInterval)
 	asrt.False(opts.EnableSampling)
 	asrt.Equal(100, opts.SampleInitial)
 	asrt.Equal(1000, opts.SampleThereafter)
@@ -1129,27 +976,19 @@ func TestOptions_EnhancedFields_EdgeCases(t *testing.T) {
 
 	// Test maximum values
 	opts := NewOptions().
-		WithBufferSize(1024*1024*10).    // 10MB
-		WithFlushInterval(24*time.Hour). // 24 hours
 		WithSampling(true, 10000, 50000) // Large sample values
 
 	err := opts.Validate()
 	asrt.NoError(err)
-	asrt.Equal(1024*1024*10, opts.BufferSize)
-	asrt.Equal(24*time.Hour, opts.FlushInterval)
 	asrt.Equal(10000, opts.SampleInitial)
 	asrt.Equal(50000, opts.SampleThereafter)
 
 	// Test minimum valid values
 	opts = NewOptions().
-		WithBufferSize(1).                  // Minimum buffer size
-		WithFlushInterval(time.Nanosecond). // Minimum flush interval
-		WithSampling(true, 1, 1)            // Minimum sample values
+		WithSampling(true, 1, 1) // Minimum sample values
 
 	err = opts.Validate()
 	asrt.NoError(err)
-	asrt.Equal(1, opts.BufferSize)
-	asrt.Equal(time.Nanosecond, opts.FlushInterval)
 	asrt.Equal(1, opts.SampleInitial)
 	asrt.Equal(1, opts.SampleThereafter)
 }
@@ -1159,16 +998,12 @@ func TestOptions_EnhancedFields_DefaultConstants(t *testing.T) {
 	asrt := assert.New(t)
 
 	// Test that default constants are reasonable
-	asrt.Equal(1024, DefaultBufferSize)
-	asrt.Equal(time.Second, DefaultFlushInterval)
 	asrt.False(DefaultEnableSampling)
 	asrt.Equal(100, DefaultSampleInitial)
 	asrt.Equal(100, DefaultSampleThereafter)
 
 	// Test that constants are used in NewOptions
 	opts := NewOptions()
-	asrt.Equal(DefaultBufferSize, opts.BufferSize)
-	asrt.Equal(DefaultFlushInterval, opts.FlushInterval)
 	asrt.Equal(DefaultEnableSampling, opts.EnableSampling)
 	asrt.Equal(DefaultSampleInitial, opts.SampleInitial)
 	asrt.Equal(DefaultSampleThereafter, opts.SampleThereafter)
@@ -1192,8 +1027,6 @@ func TestOptions_EnhancedFields_Integration(t *testing.T) {
 		WithMaxSize(150).
 		WithMaxBackups(7).
 		WithCompress(true).
-		WithBufferSize(8192).
-		WithFlushInterval(3*time.Second).
 		WithSampling(true, 75, 750)
 
 	// Verify all fields are set correctly
@@ -1209,8 +1042,6 @@ func TestOptions_EnhancedFields_Integration(t *testing.T) {
 	asrt.Equal(150, opts.MaxSize)
 	asrt.Equal(7, opts.MaxBackups)
 	asrt.True(opts.Compress)
-	asrt.Equal(8192, opts.BufferSize)
-	asrt.Equal(3*time.Second, opts.FlushInterval)
 	asrt.True(opts.EnableSampling)
 	asrt.Equal(75, opts.SampleInitial)
 	asrt.Equal(750, opts.SampleThereafter)
@@ -1225,19 +1056,7 @@ func TestOptions_EnhancedFields_MultipleModifications(t *testing.T) {
 	asrt := assert.New(t)
 
 	// Test that fields can be modified multiple times
-	opts := NewOptions().
-		WithBufferSize(1024).
-		WithBufferSize(2048).
-		WithBufferSize(4096)
-
-	asrt.Equal(4096, opts.BufferSize)
-
-	opts = NewOptions().
-		WithFlushInterval(time.Second).
-		WithFlushInterval(2 * time.Second).
-		WithFlushInterval(5 * time.Second)
-
-	asrt.Equal(5*time.Second, opts.FlushInterval)
+	opts := NewOptions()
 
 	opts = NewOptions().
 		WithSampling(true, 100, 1000).
@@ -1255,17 +1074,13 @@ func TestOptions_EnhancedFields_ZeroDurationHandling(t *testing.T) {
 
 	// Test that zero duration is handled correctly in validation
 	opts := NewOptions()
-	opts.FlushInterval = 0
 	err := opts.Validate()
 	asrt.NoError(err) // Zero should be valid (no flushing)
 
 	// Test that zero is preserved when set explicitly
-	opts = NewOptions().WithFlushInterval(0)
-	asrt.Equal(DefaultFlushInterval, opts.FlushInterval) // WithFlushInterval converts 0 to default
 
 	// But if set directly, zero should be valid
 	opts = NewOptions()
-	opts.FlushInterval = 0
 	err = opts.Validate()
 	asrt.NoError(err)
 }

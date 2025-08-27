@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"go.uber.org/zap/zapcore"
 
@@ -26,7 +25,7 @@ const (
 	DefaultLevel      = zapcore.InfoLevel
 	DefaultTimeLayout = "2006-01-02 15:04:05.000"
 	DefaultFormat     = "console" // console style
-	DefaultFilename   = ""        // Empty string means use default date format
+	DefaultFilename   = ""        // Default filename prefix
 
 	DefaultDisableCaller     = false
 	DefaultDisableStacktrace = false
@@ -36,39 +35,46 @@ const (
 	DefaultMaxBackups = 3     // Keep 3 old log files
 	DefaultCompress   = false // Not compress rotated log files
 
-	// New defaults for enhanced functionality
-	DefaultBufferSize       = 1024        // 1KB buffer size
-	DefaultFlushInterval    = time.Second // 1 second flush interval
-	DefaultEnableSampling   = false       // Sampling disabled by default
-	DefaultSampleInitial    = 100         // Initial sample count
-	DefaultSampleThereafter = 100         // Subsequent sample count
+	// Defaults for sampling functionality
+	DefaultEnableSampling   = false // Sampling disabled by default
+	DefaultSampleInitial    = 100   // Initial sample count
+	DefaultSampleThereafter = 100   // Subsequent sample count
+
+	FormatConsole = "console"
+	FormatJSON    = "json"
+
+	LevelDebug = "debug"
+	LevelInfo  = "info"
 )
 
 // Options for logger
 type Options struct {
-	Prefix     string `json:"prefix,omitempty"      yaml:"prefix,omitempty"`      // Log Prefix, e.g ZIWI
-	Directory  string `json:"directory,omitempty"   yaml:"directory,omitempty"`   // Log File Directory, e.g logs
-	Filename   string `json:"filename,omitempty"    yaml:"filename,omitempty"`    // Log filename prefix, e.g "ziwi"
-	Level      string `json:"level,omitempty"       yaml:"level,omitempty"`       // Log Level, "debug", "info", "warn", "error"
-	TimeLayout string `json:"time_layout,omitempty" yaml:"time_layout,omitempty"` // Time Layout, e.g "2006-01-02 15:04:05.000"
-	Format     string `json:"format,omitempty"      yaml:"format,omitempty"`      // Log Format, "console", "json"
+	Prefix     string `json:"prefix,omitempty"      yaml:"prefix,omitempty"`      // Log Prefix
+	Directory  string `json:"directory,omitempty"   yaml:"directory,omitempty"`   // Log File Directory
+	Filename   string `json:"filename,omitempty"    yaml:"filename,omitempty"`    // Log filename prefix
+	Level      string `json:"level,omitempty"       yaml:"level,omitempty"`       // Log Level
+	TimeLayout string `json:"time_layout,omitempty" yaml:"time_layout,omitempty"` // Time Layout
+	Format     string `json:"format,omitempty"      yaml:"format,omitempty"`      // Log Format
 
-	DisableCaller     bool `json:"disable_caller,omitempty"      yaml:"disable_caller,omitempty"`      // Disable caller information
-	DisableStacktrace bool `json:"disable_stacktrace,omitempty"  yaml:"disable_stacktrace,omitempty"`  // Disable stack traces
-	DisableSplitError bool `json:"disable_split_error,omitempty" yaml:"disable_split_error,omitempty"` // Disable separate error log files
+	DisableCaller     bool `json:"disable_caller,omitempty"      yaml:"disable_caller,omitempty"`
+	DisableStacktrace bool `json:"disable_stacktrace,omitempty"  yaml:"disable_stacktrace,omitempty"`
+	DisableSplitError bool `json:"disable_split_error,omitempty" yaml:"disable_split_error,omitempty"`
 
+	// -----------------
 	// Log rotation settings
-	MaxSize    int  `json:"max_size,omitempty"    yaml:"max_size,omitempty"`    // Maximum size of log files in megabytes before rotation
-	MaxBackups int  `json:"max_backups,omitempty" yaml:"max_backups,omitempty"` // Maximum number of old log files to retain
+	// -----------------
+
+	MaxSize    int  `json:"max_size,omitempty"    yaml:"max_size,omitempty"`    // Maximum size of log files in megabytes
+	MaxBackups int  `json:"max_backups,omitempty" yaml:"max_backups,omitempty"` // Maximum number of old log files
 	Compress   bool `json:"compress,omitempty"    yaml:"compress,omitempty"`    // Whether to compress rotated log files
 
-	// Enhanced functionality settings
-	BufferSize    int           `json:"buffer_size,omitempty"    yaml:"buffer_size,omitempty"`    // Buffer size for log writes
-	FlushInterval time.Duration `json:"flush_interval,omitempty" yaml:"flush_interval,omitempty"` // Interval for flushing buffered logs
+	// -----------------
+	// Sampling settings
+	// -----------------
 
-	EnableSampling   bool `json:"enable_sampling,omitempty"   yaml:"enable_sampling,omitempty"`   // Enable log sampling
-	SampleInitial    int  `json:"sample_initial,omitempty"    yaml:"sample_initial,omitempty"`    // Initial sample count
-	SampleThereafter int  `json:"sample_thereafter,omitempty" yaml:"sample_thereafter,omitempty"` // Subsequent sample count
+	EnableSampling   bool `json:"enable_sampling,omitempty"   yaml:"enable_sampling,omitempty"`
+	SampleInitial    int  `json:"sample_initial,omitempty"    yaml:"sample_initial,omitempty"`
+	SampleThereafter int  `json:"sample_thereafter,omitempty" yaml:"sample_thereafter,omitempty"`
 }
 
 // NewOptions return the default Options.
@@ -91,12 +97,10 @@ type Options struct {
 //	MaxBackups: 3,   // Keep 3 old log files
 //	Compress:   false,
 //
-//	// Enhanced functionality settings
-//	BufferSize:       1024,        // 1KB buffer
-//	FlushInterval:    time.Second, // 1 second flush interval
-//	EnableSampling:   false,       // Sampling disabled by default
-//	SampleInitial:    100,         // Initial sample count
-//	SampleThereafter: 100,         // Subsequent sample count
+//	// Sampling settings
+//	EnableSampling:   false, // Sampling disabled by default
+//	SampleInitial:    100,   // Initial sample count
+//	SampleThereafter: 100,   // Subsequent sample count
 func NewOptions() *Options {
 	opt := &Options{
 		Prefix:    DefaultPrefix,
@@ -116,9 +120,7 @@ func NewOptions() *Options {
 		MaxBackups: DefaultMaxBackups,
 		Compress:   DefaultCompress,
 
-		// Enhanced functionality settings
-		BufferSize:       DefaultBufferSize,
-		FlushInterval:    DefaultFlushInterval,
+		// Sampling settings
 		EnableSampling:   DefaultEnableSampling,
 		SampleInitial:    DefaultSampleInitial,
 		SampleThereafter: DefaultSampleThereafter,
@@ -216,24 +218,6 @@ func (opt *Options) WithCompress(compress bool) *Options {
 	return opt
 }
 
-func (opt *Options) WithBufferSize(size int) *Options {
-	if size > 0 {
-		opt.BufferSize = size
-	} else {
-		opt.BufferSize = DefaultBufferSize
-	}
-	return opt
-}
-
-func (opt *Options) WithFlushInterval(interval time.Duration) *Options {
-	if interval > 0 {
-		opt.FlushInterval = interval
-	} else {
-		opt.FlushInterval = DefaultFlushInterval
-	}
-	return opt
-}
-
 func (opt *Options) WithSampling(enable bool, initial, thereafter int) *Options {
 	opt.EnableSampling = enable
 	if initial > 0 {
@@ -293,15 +277,7 @@ func (opt *Options) Validate() error {
 		return fmt.Errorf("invalid max backups: %d, expected: > 0", opt.MaxBackups)
 	}
 
-	// Validate enhanced functionality fields
-	if opt.BufferSize < 0 {
-		return fmt.Errorf("invalid buffer size: %d, expected: >= 0", opt.BufferSize)
-	}
-
-	if opt.FlushInterval < 0 {
-		return fmt.Errorf("invalid flush interval: %v, expected: >= 0", opt.FlushInterval)
-	}
-
+	// Validate sampling settings
 	if opt.EnableSampling {
 		if opt.SampleInitial <= 0 {
 			return fmt.Errorf("invalid sample initial: %d, expected: > 0", opt.SampleInitial)
