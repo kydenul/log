@@ -93,8 +93,6 @@ func main() {
         Format("json").
         Directory("./logs").
         Filename("myapp").
-        BufferSize(1024).
-        FlushInterval(time.Second).
         Sampling(true, 100, 1000).
         Build()
     
@@ -182,10 +180,6 @@ disable-split-error: false
 max-size: 100
 max-backups: 5
 compress: true
-
-# Performance settings
-buffer-size: 2048
-flush-interval: "5s"
 
 # Sampling (reduces log volume in high-traffic scenarios)
 enable-sampling: true
@@ -394,7 +388,6 @@ The logger automatically handles:
 
 ### Performance Optimizations
 
-- **Buffered writes**: Configurable buffer sizes for better performance
 - **Sampling**: Reduce log volume in high-traffic scenarios
 - **Atomic operations**: Thread-safe file operations with minimal locking
 - **Memory pooling**: Reuses buffers to reduce garbage collection
@@ -429,7 +422,6 @@ logger := log.WithPreset(log.DevelopmentPreset())
 - JSON output format
 - Caller information disabled (performance)
 - Stack traces disabled (performance)
-- Larger buffer sizes
 - Log sampling enabled
 - File compression enabled
 
@@ -443,7 +435,6 @@ logger := log.WithPreset(log.ProductionPreset())
 - Console output format
 - Caller information disabled (cleaner output)
 - Stack traces disabled (cleaner output)
-- Small buffer sizes
 - Fast flush for test verification
 - No log sampling
 
