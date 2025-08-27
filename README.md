@@ -22,7 +22,7 @@ A high-performance, structured logging package for Go applications, built on top
 - **Zero-configuration quick start** - Get started with one line of code
 - **Environment presets** - Pre-configured settings for development, production, and testing
 - **Builder pattern** - Fluent API for easy configuration
-- **YAML configuration** - Load configuration from YAML files
+- **Multi-format configuration** - Load configuration from YAML, JSON, TOML, and other formats
 - **HTTP middleware** - Built-in middleware for request/response logging
 - **Utility functions** - Common logging patterns made simple
 - **Enhanced error handling** - Better error messages and automatic fallbacks
@@ -113,9 +113,29 @@ func main() {
 
 ## Configuration
 
+### Powered by Viper
+
+The logging library uses [Viper](https://github.com/spf13/viper) for configuration management, providing:
+
+- **Multiple format support**: YAML, JSON, TOML, HCL, INI, and more
+- **Automatic format detection**: Based on file extension
+- **Environment variable support**: Can be extended to read from environment variables
+- **Configuration validation**: Built-in validation with helpful error messages
+- **Hot reloading capability**: Can be extended for runtime configuration updates
+
+### Supported Configuration Formats
+
+| Format | Extensions | Example |
+|--------|------------|---------|
+| YAML   | `.yaml`, `.yml` | `config.yaml` |
+| JSON   | `.json` | `config.json` |
+| TOML   | `.toml` | `config.toml` |
+
+All formats support the same configuration options with automatic conversion between formats.
+
 ### Configuration from Files
 
-Load configuration from YAML files:
+Load configuration from multiple file formats (YAML, JSON, TOML):
 
 ```go
 // Load from YAML file
@@ -123,10 +143,26 @@ logger, err := log.FromConfigFile("config.yaml")
 if err != nil {
     log.Fatal("Failed to load config:", err)
 }
-logger.Info("Logger configured from file")
+logger.Info("Logger configured from YAML file")
+
+// Load from JSON file
+logger, err = log.FromConfigFile("config.json")
+if err != nil {
+    log.Fatal("Failed to load config:", err)
+}
+logger.Info("Logger configured from JSON file")
+
+// Load from TOML file
+logger, err = log.FromConfigFile("config.toml")
+if err != nil {
+    log.Fatal("Failed to load config:", err)
+}
+logger.Info("Logger configured from TOML file")
 ```
 
-Example YAML configuration:
+Example configurations in different formats:
+
+**YAML configuration (config.yaml):**
 
 ```yaml
 # config.yaml
@@ -157,6 +193,54 @@ sample-initial: 100
 sample-thereafter: 1000
 ```
 
+**JSON configuration (config.json):**
+
+```json
+{
+  "prefix": "MYAPP",
+  "directory": "./logs",
+  "filename": "app",
+  "level": "info",
+  "format": "json",
+  "time_layout": "2006-01-02 15:04:05.000",
+  "disable_caller": false,
+  "disable_stacktrace": false,
+  "disable_split_error": false,
+  "max_size": 100,
+  "max_backups": 5,
+  "compress": true,
+  "enable_sampling": true,
+  "sample_initial": 100,
+  "sample_thereafter": 1000
+}
+```
+
+**TOML configuration (config.toml):**
+
+```toml
+prefix = "MYAPP"
+directory = "./logs"
+filename = "app"
+level = "info"
+format = "json"
+time_layout = "2006-01-02 15:04:05.000"
+
+# Basic settings
+disable_caller = false
+disable_stacktrace = false
+disable_split_error = false
+
+# File rotation
+max_size = 100
+max_backups = 5
+compress = true
+
+# Sampling (reduces log volume in high-traffic scenarios)
+enable_sampling = true
+sample_initial = 100
+sample_thereafter = 1000
+```
+
 ### Advanced Configuration
 
 For more control over configuration loading:
@@ -169,12 +253,17 @@ if err != nil {
 }
 logger := log.NewLog(opts)
 
-// Load from any supported file format
-opts, err := log.LoadFromFile("config.yaml") // Supports .yaml, .yml
+// Load from any supported file format (auto-detected by extension)
+opts, err := log.LoadFromFile("config.yaml") // Supports .yaml, .yml, .json, .toml
 if err != nil {
     log.Fatal("Failed to load config:", err)
 }
 logger := log.NewLog(opts)
+
+// Examples with different formats
+opts, err = log.LoadFromFile("config.json")  // JSON format
+opts, err = log.LoadFromFile("config.toml")  // TOML format
+opts, err = log.LoadFromFile("config.yml")   // YAML format
 ```
 
 ## HTTP Middleware
@@ -431,8 +520,22 @@ import (
 )
 
 func main() {
-    // Load configuration from multiple sources
-    logger, err := log.FromConfig("config.yaml", "MYAPP_")
+    // Load configuration from different formats
+    var logger *log.Log
+    var err error
+    
+    // Try different configuration formats
+    if _, err := os.Stat("config.yaml"); err == nil {
+        logger, err = log.FromConfigFile("config.yaml")
+    } else if _, err := os.Stat("config.json"); err == nil {
+        logger, err = log.FromConfigFile("config.json")
+    } else if _, err := os.Stat("config.toml"); err == nil {
+        logger, err = log.FromConfigFile("config.toml")
+    } else {
+        // Fallback to default configuration
+        logger = log.Quick()
+    }
+    
     logutil.FatalOnError(logger, err, "Failed to initialize logger")
     
     // Application logic
@@ -500,8 +603,8 @@ logger := log.NewBuilder().
     Filename("invalid<>name").   // Will sanitize or fall back to default
     Build()
 
-// YAML configuration with detailed error messages
-logger, err := log.FromConfigFile("config.yaml")
+// Multi-format configuration with detailed error messages
+logger, err := log.FromConfigFile("config.yaml") // Also supports .json, .toml
 if err != nil {
     // Error includes specific guidance on what went wrong
     log.Printf("Config error: %v", err)
@@ -527,13 +630,26 @@ if err != nil {
 
 8. **Always call Sync()**: Call `logger.Sync()` or `log.Sync()` before application exit to flush buffers
 
+## Recent Updates
+
+### Configuration Enhancement (Latest)
+
+The logging library has been enhanced with **Viper integration** for improved configuration management:
+
+- **Multi-format support**: Now supports YAML, JSON, TOML, and other formats
+- **Backward compatibility**: All existing YAML configurations continue to work
+- **Enhanced validation**: Better error messages and configuration validation
+- **Future extensibility**: Foundation for environment variables and hot-reloading
+
+**Migration**: No changes required for existing YAML configurations. New formats are automatically supported based on file extension.
+
 ## Requirements
 
 - Go 1.23.4 or higher
 - Dependencies:
   - go.uber.org/zap
   - gopkg.in/natefinch/lumberjack.v2
-  - gopkg.in/yaml.v3
+  - github.com/spf13/viper (replaces gopkg.in/yaml.v3)
   - github.com/stretchr/testify (for testing)
 
 ## License

@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestYAMLConfigurationIntegration tests YAML-only configuration functionality
+// TestYAMLConfigurationIntegration tests YAML configuration functionality (now powered by Viper)
 func TestYAMLConfigurationIntegration(t *testing.T) {
 	// Create temporary directory for test files
 	tempDir := filepath.Join(os.TempDir(), "yaml_config_integration_test")

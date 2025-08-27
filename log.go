@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,9 +14,9 @@ import (
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"gopkg.in/yaml.v3"
 
 	"github.com/kydenul/log/internal"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -652,9 +651,9 @@ func ReplaceLogger(l *Log) {
 	}
 }
 
-// LoadFromYAML loads configuration from a YAML file.
-// This is the primary method for loading logger configuration from files.
-// The YAML file should contain configuration options that match the Options struct fields.
+// LoadFromYAML loads configuration from a YAML file using Viper.
+// This function provides backward compatibility while leveraging Viper's powerful
+// configuration management capabilities for enhanced parsing and validation.
 //
 // Parameters:
 //   - yamlPath: Path to the YAML configuration file
@@ -680,29 +679,146 @@ func ReplaceLogger(l *Log) {
 //	    log.Fatal("Failed to load YAML config:", err)
 //	}
 //	logger := log.NewLog(opts)
-func LoadFromYAML(yamlPath string) (*Options, error) {
+//
+// Note: This function now uses LoadFromFile internally for improved configuration
+// parsing and validation. For multi-format support, use LoadFromFile directly.
+func LoadFromYAML(yamlPath string) (*Options, error) { return LoadFromFile(yamlPath) }
+
+// LoadFromJSON loads configuration from a JSON file using Viper.
+// This function provides a convenient wrapper for JSON configuration files
+// while leveraging Viper's powerful configuration management capabilities.
+//
+// Parameters:
+//   - jsonPath: Path to the JSON configuration file
+//
+// Returns:
+//   - *Options: Configuration options loaded from JSON file
+//   - error: Error if file loading, parsing, or validation fails
+//
+// JSON Configuration Example:
+//
+//	{
+//	  "level": "info",
+//	  "format": "json",
+//	  "directory": "/var/log/myapp",
+//	  "filename": "application",
+//	  "max_size": 100,
+//	  "max_backups": 5,
+//	  "compress": true
+//	}
+//
+// Example Usage:
+//
+//	opts, err := log.LoadFromJSON("config.json")
+//	if err != nil {
+//	    log.Fatal("Failed to load JSON config:", err)
+//	}
+//	logger := log.NewLog(opts)
+//
+// Note: This function uses LoadFromFile internally for improved configuration
+// parsing and validation. For multi-format support, use LoadFromFile directly.
+func LoadFromJSON(jsonPath string) (*Options, error) { return LoadFromFile(jsonPath) }
+
+// LoadFromTOML loads configuration from a TOML file using Viper.
+// This function provides a convenient wrapper for TOML configuration files
+// while leveraging Viper's powerful configuration management capabilities.
+//
+// Parameters:
+//   - tomlPath: Path to the TOML configuration file
+//
+// Returns:
+//   - *Options: Configuration options loaded from TOML file
+//   - error: Error if file loading, parsing, or validation fails
+//
+// TOML Configuration Example:
+//
+//	level = "info"
+//	format = "json"
+//	directory = "/var/log/myapp"
+//	filename = "application"
+//	max_size = 100
+//	max_backups = 5
+//	compress = true
+//
+// Example Usage:
+//
+//	opts, err := log.LoadFromTOML("config.toml")
+//	if err != nil {
+//	    log.Fatal("Failed to load TOML config:", err)
+//	}
+//	logger := log.NewLog(opts)
+//
+// Note: This function uses LoadFromFile internally for improved configuration
+// parsing and validation. For multi-format support, use LoadFromFile directly.
+func LoadFromTOML(tomlPath string) (*Options, error) { return LoadFromFile(tomlPath) }
+
+// LoadFromFile loads configuration from multiple file formats using Viper.
+// This function automatically detects the file format based on the file extension
+// and supports YAML, JSON, TOML, and other formats supported by Viper.
+//
+// Parameters:
+//   - configPath: Path to the configuration file
+//
+// Returns:
+//   - *Options: Configuration options loaded from the configuration file
+//   - error: Error if file loading, format detection, or parsing fails
+//
+// Supported file formats:
+//   - .yaml, .yml (YAML format)
+//   - .json (JSON format)
+//   - .toml (TOML format)
+//   - Other formats supported by Viper
+//
+// Example Usage:
+//
+//	// Load YAML configuration
+//	opts, err := log.LoadFromFile("config.yaml")
+//	if err != nil {
+//	    log.Fatal("Failed to load config:", err)
+//	}
+//	logger := log.NewLog(opts)
+//
+//	// Load JSON configuration
+//	opts, err = log.LoadFromFile("config.json")
+//	if err != nil {
+//	    log.Fatal("Failed to load config:", err)
+//	}
+//	logger = log.NewLog(opts)
+//
+//	// Load TOML configuration
+//	opts, err = log.LoadFromFile("config.toml")
+//	if err != nil {
+//	    log.Fatal("Failed to load config:", err)
+//	}
+//	logger = log.NewLog(opts)
+func LoadFromFile(configPath string) (*Options, error) {
 	// Start with default options
 	opts := NewOptions()
 	if opts == nil {
 		return nil, errors.New("failed to create default options")
 	}
 
-	// Read YAML file content
-	data, err := os.ReadFile(yamlPath) //nolint:gosec
-	if err != nil {
+	// Create a new viper instance
+	v := viper.New()
+
+	// Set the config file path
+	v.SetConfigFile(configPath)
+
+	// Read the configuration file
+	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf(
-			"failed to read YAML configuration file %s: %w. Please ensure the file exists and is accessible",
-			yamlPath,
+			"failed to read configuration file %s: %w. Please ensure the file exists and is accessible",
+			configPath,
 			err,
 		)
 	}
 
-	// Parse YAML content into Options struct
-	if err := yaml.Unmarshal(data, opts); err != nil {
+	// Unmarshal the configuration into Options struct
+	if err := v.Unmarshal(opts); err != nil {
 		return nil, fmt.Errorf(
-			"failed to parse YAML configuration from %s: %w. "+
-				"Please check your YAML syntax and ensure all field names match the expected configuration options",
-			yamlPath,
+			"failed to parse configuration from %s: %w. "+
+				"Please check your configuration syntax and ensure all field names match the expected configuration options",
+			configPath,
 			err,
 		)
 	}
@@ -710,66 +826,14 @@ func LoadFromYAML(yamlPath string) (*Options, error) {
 	// Validate the loaded configuration
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf(
-			"invalid YAML configuration values in %s: %w. "+
+			"invalid configuration values in %s: %w. "+
 				"Please review your configuration values and ensure they meet the required constraints",
-			yamlPath,
+			configPath,
 			err,
 		)
 	}
 
 	return opts, nil
-}
-
-// LoadFromFile loads configuration from a YAML file with automatic format detection.
-// This function only supports YAML format (.yaml, .yml extensions).
-// For other formats (JSON, TOML), it will return a clear error message
-// directing users to convert their configuration to YAML format.
-//
-// Parameters:
-//   - configPath: Path to the YAML configuration file
-//
-// Returns:
-//   - *Options: Configuration options loaded from YAML file
-//   - error: Error if file loading, format detection, or parsing fails
-//
-// Supported file extensions:
-//   - .yaml, .yml (YAML format)
-//   - Other extensions will be treated as YAML by default
-//   - .json, .toml extensions will return an error with conversion guidance
-//
-// Example Usage:
-//
-//	opts, err := log.LoadFromFile("config.yaml")
-//	if err != nil {
-//	    log.Fatal("Failed to load config:", err)
-//	}
-//	logger := log.NewLog(opts)
-func LoadFromFile(configPath string) (*Options, error) {
-	// Determine file format by extension
-	ext := strings.ToLower(configPath)
-
-	switch {
-	case strings.HasSuffix(ext, ".yaml") || strings.HasSuffix(ext, ".yml"):
-		return LoadFromYAML(configPath)
-
-	case strings.HasSuffix(ext, ".json"):
-		return nil, fmt.Errorf(
-			"JSON format not supported for file %s. "+
-				"Please convert your configuration to YAML format (.yaml or .yml extension) and use YAML syntax instead",
-			configPath,
-		)
-
-	case strings.HasSuffix(ext, ".toml"):
-		return nil, fmt.Errorf(
-			"TOML format not supported for file %s. "+
-				"Please convert your configuration to YAML format (.yaml or .yml extension) and use YAML syntax instead",
-			configPath,
-		)
-
-	default:
-		// Default to YAML for unknown extensions
-		return LoadFromYAML(configPath)
-	}
 }
 
 // Quick creates a logger with default configuration for quick setup.

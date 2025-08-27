@@ -49,32 +49,32 @@ const (
 
 // Options for logger
 type Options struct {
-	Prefix     string `json:"prefix,omitempty"      yaml:"prefix,omitempty"`      // Log Prefix
-	Directory  string `json:"directory,omitempty"   yaml:"directory,omitempty"`   // Log File Directory
-	Filename   string `json:"filename,omitempty"    yaml:"filename,omitempty"`    // Log filename prefix
-	Level      string `json:"level,omitempty"       yaml:"level,omitempty"`       // Log Level
-	TimeLayout string `json:"time_layout,omitempty" yaml:"time_layout,omitempty"` // Time Layout
-	Format     string `json:"format,omitempty"      yaml:"format,omitempty"`      // Log Format
+	Prefix     string `mapstructure:"prefix"`      // Log Prefix
+	Directory  string `mapstructure:"directory"`   // Log File Directory
+	Filename   string `mapstructure:"filename"`    // Log filename prefix
+	Level      string `mapstructure:"level"`       // Log Level
+	TimeLayout string `mapstructure:"time_layout"` // Time Layout
+	Format     string `mapstructure:"format"`      // Log Format
 
-	DisableCaller     bool `json:"disable_caller,omitempty"      yaml:"disable_caller,omitempty"`
-	DisableStacktrace bool `json:"disable_stacktrace,omitempty"  yaml:"disable_stacktrace,omitempty"`
-	DisableSplitError bool `json:"disable_split_error,omitempty" yaml:"disable_split_error,omitempty"`
+	DisableCaller     bool `mapstructure:"disable_caller"`
+	DisableStacktrace bool `mapstructure:"disable_stacktrace"`
+	DisableSplitError bool `mapstructure:"disable_split_error"`
 
 	// -----------------
 	// Log rotation settings
 	// -----------------
 
-	MaxSize    int  `json:"max_size,omitempty"    yaml:"max_size,omitempty"`    // Maximum size of log files in megabytes
-	MaxBackups int  `json:"max_backups,omitempty" yaml:"max_backups,omitempty"` // Maximum number of old log files
-	Compress   bool `json:"compress,omitempty"    yaml:"compress,omitempty"`    // Whether to compress rotated log files
+	MaxSize    int  `mapstructure:"max_size"`    // Maximum size of log files in megabytes
+	MaxBackups int  `mapstructure:"max_backups"` // Maximum number of old log files
+	Compress   bool `mapstructure:"compress"`    // Whether to compress rotated log files
 
 	// -----------------
 	// Sampling settings
 	// -----------------
 
-	EnableSampling   bool `json:"enable_sampling,omitempty"   yaml:"enable_sampling,omitempty"`
-	SampleInitial    int  `json:"sample_initial,omitempty"    yaml:"sample_initial,omitempty"`
-	SampleThereafter int  `json:"sample_thereafter,omitempty" yaml:"sample_thereafter,omitempty"`
+	EnableSampling   bool `mapstructure:"enable_sampling"`
+	SampleInitial    int  `mapstructure:"sample_initial"`
+	SampleThereafter int  `mapstructure:"sample_thereafter"`
 }
 
 // NewOptions return the default Options.

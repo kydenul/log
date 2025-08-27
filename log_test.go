@@ -2506,7 +2506,7 @@ func TestLoadFromYAMLFileNotFound(t *testing.T) {
 	opts, err := LoadFromYAML("/non/existent/file.yaml")
 	assert.Error(t, err)
 	assert.Nil(t, opts)
-	assert.Contains(t, err.Error(), "failed to read YAML configuration file")
+	assert.Contains(t, err.Error(), "failed to read configuration file")
 }
 
 func TestLoadFromYAMLInvalidContent(t *testing.T) {
@@ -2527,7 +2527,121 @@ invalid_yaml: [unclosed array
 	opts, err := LoadFromYAML(yamlFile)
 	assert.Error(t, err)
 	assert.Nil(t, opts)
-	assert.Contains(t, err.Error(), "failed to parse YAML config")
+	assert.Contains(t, err.Error(), "failed to read configuration file")
+}
+
+func TestLoadFromJSON(t *testing.T) {
+	// Create a temporary JSON config file
+	tempDir := t.TempDir()
+	jsonFile := filepath.Join(tempDir, "test_config.json")
+
+	jsonContent := `{
+  "prefix": "JSON_",
+  "directory": "/json/logs",
+  "level": "info",
+  "format": "console",
+  "max_size": 200,
+  "compress": false
+}`
+
+	err := os.WriteFile(jsonFile, []byte(jsonContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromJSON function
+	opts, err := LoadFromJSON(jsonFile)
+	require.NoError(t, err)
+	require.NotNil(t, opts)
+
+	assert.Equal(t, "JSON_", opts.Prefix)
+	assert.Equal(t, "/json/logs", opts.Directory)
+	assert.Equal(t, "info", opts.Level)
+	assert.Equal(t, "console", opts.Format)
+	assert.Equal(t, 200, opts.MaxSize)
+	assert.False(t, opts.Compress)
+}
+
+func TestLoadFromJSONFileNotFound(t *testing.T) {
+	// Test with non-existent file
+	opts, err := LoadFromJSON("/non/existent/file.json")
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "failed to read configuration file")
+}
+
+func TestLoadFromJSONInvalidContent(t *testing.T) {
+	// Create a temporary file with invalid JSON content
+	tempDir := t.TempDir()
+	jsonFile := filepath.Join(tempDir, "invalid.json")
+
+	invalidJsonContent := `{
+  "prefix": "TEST_",
+  "level": "debug",
+  "invalid_json": [unclosed array
+}`
+
+	err := os.WriteFile(jsonFile, []byte(invalidJsonContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromJSON function with invalid content
+	opts, err := LoadFromJSON(jsonFile)
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "failed to read configuration file")
+}
+
+func TestLoadFromTOML(t *testing.T) {
+	// Create a temporary TOML config file
+	tempDir := t.TempDir()
+	tomlFile := filepath.Join(tempDir, "test_config.toml")
+
+	tomlContent := `prefix = "TOML_"
+directory = "/toml/logs"
+level = "warn"
+format = "json"
+max_size = 300
+compress = true`
+
+	err := os.WriteFile(tomlFile, []byte(tomlContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromTOML function
+	opts, err := LoadFromTOML(tomlFile)
+	require.NoError(t, err)
+	require.NotNil(t, opts)
+
+	assert.Equal(t, "TOML_", opts.Prefix)
+	assert.Equal(t, "/toml/logs", opts.Directory)
+	assert.Equal(t, "warn", opts.Level)
+	assert.Equal(t, "json", opts.Format)
+	assert.Equal(t, 300, opts.MaxSize)
+	assert.True(t, opts.Compress)
+}
+
+func TestLoadFromTOMLFileNotFound(t *testing.T) {
+	// Test with non-existent file
+	opts, err := LoadFromTOML("/non/existent/file.toml")
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "failed to read configuration file")
+}
+
+func TestLoadFromTOMLInvalidContent(t *testing.T) {
+	// Create a temporary file with invalid TOML content
+	tempDir := t.TempDir()
+	tomlFile := filepath.Join(tempDir, "invalid.toml")
+
+	invalidTomlContent := `prefix = "TEST_"
+level = "debug"
+invalid_toml = [unclosed array`
+
+	err := os.WriteFile(tomlFile, []byte(invalidTomlContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromTOML function with invalid content
+	opts, err := LoadFromTOML(tomlFile)
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "failed to read configuration file")
 }
 
 func TestLoadFromFileYAML(t *testing.T) {
@@ -2575,19 +2689,19 @@ level: "warn"
 }
 
 func TestLoadFromFileJSON(t *testing.T) {
-	// Test LoadFromFile function with JSON extension
+	// Test LoadFromFile function with JSON extension (should fail due to file not found)
 	opts, err := LoadFromFile("config.json")
 	assert.Error(t, err)
 	assert.Nil(t, opts)
-	assert.Contains(t, err.Error(), "JSON format not supported")
+	assert.Contains(t, err.Error(), "failed to read configuration file")
 }
 
 func TestLoadFromFileTOML(t *testing.T) {
-	// Test LoadFromFile function with TOML extension
+	// Test LoadFromFile function with TOML extension (should fail due to file not found)
 	opts, err := LoadFromFile("config.toml")
 	assert.Error(t, err)
 	assert.Nil(t, opts)
-	assert.Contains(t, err.Error(), "TOML format not supported")
+	assert.Contains(t, err.Error(), "failed to read configuration file")
 }
 
 func TestLoadFromFileUnknownExtension(t *testing.T) {
@@ -2603,13 +2717,11 @@ level: "error"
 	err := os.WriteFile(unknownFile, []byte(yamlContent), 0o644)
 	require.NoError(t, err)
 
-	// Test LoadFromFile function with unknown extension (should default to YAML)
+	// Test LoadFromFile function with unknown extension (viper should fail)
 	opts, err := LoadFromFile(unknownFile)
-	require.NoError(t, err)
-	require.NotNil(t, opts)
-
-	assert.Equal(t, "UNKNOWN_", opts.Prefix)
-	assert.Equal(t, "error", opts.Level)
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "Unsupported Config Type")
 }
 
 // Comprehensive tests for configuration management system
@@ -2704,7 +2816,7 @@ func TestLoadFromYAML_InvalidFile(t *testing.T) {
 	// Test nonexistent file
 	_, err := LoadFromYAML("nonexistent.yaml")
 	asrt.Error(err)
-	asrt.Contains(err.Error(), "failed to read YAML configuration file")
+	asrt.Contains(err.Error(), "failed to read configuration file")
 
 	// Test invalid YAML syntax
 	tempDir := t.TempDir()
@@ -2714,7 +2826,7 @@ func TestLoadFromYAML_InvalidFile(t *testing.T) {
 
 	_, err = LoadFromYAML(invalidFile)
 	asrt.Error(err)
-	asrt.Contains(err.Error(), "failed to parse YAML config")
+	asrt.Contains(err.Error(), "failed to read configuration file")
 }
 
 func TestLoadFromYAML_InvalidConfiguration(t *testing.T) {
@@ -2739,7 +2851,7 @@ flush_interval: "-1s"
 
 	_, err = LoadFromYAML(invalidConfigFile)
 	asrt.Error(err)
-	asrt.Contains(err.Error(), "invalid YAML configuration")
+	asrt.Contains(err.Error(), "invalid configuration values")
 }
 
 func TestLoadFromFile_FormatDetection(t *testing.T) {
@@ -2770,25 +2882,26 @@ func TestLoadFromFile_FormatDetection(t *testing.T) {
 			"",
 		},
 		{
-			"JSON file (not supported)",
+			"JSON file (now supported with viper)",
 			"config.json",
-			`{"level": "info"}`,
-			true,
-			"JSON format not supported",
-		},
-		{
-			"TOML file (not supported)",
-			"config.toml",
-			`level = "info"`,
-			true,
-			"TOML format not supported",
-		},
-		{
-			"Unknown extension defaults to YAML",
-			"config.conf",
-			"level: warn\nformat: console",
+			`{"level": "info", "format": "json"}`,
 			false,
 			"",
+		},
+		{
+			"TOML file (now supported with viper)",
+			"config.toml",
+			`level = "info"
+format = "console"`,
+			false,
+			"",
+		},
+		{
+			"Unknown extension (unsupported by viper)",
+			"config.conf",
+			"level: warn\nformat: console",
+			true,
+			"Unsupported Config Type",
 		},
 	}
 
@@ -2985,29 +3098,34 @@ func TestFromConfigFile_InvalidFile(t *testing.T) {
 	asrt.Contains(err.Error(), "failed to load YAML configuration from file")
 }
 
-func TestFromConfigFile_UnsupportedFormats(t *testing.T) {
+func TestFromConfigFile_SupportedFormats(t *testing.T) {
 	t.Parallel()
 	asrt := assert.New(t)
 
 	tempDir := t.TempDir()
 
-	// Test JSON file (should fail)
+	// Test JSON file (should work with viper)
 	jsonFile := filepath.Join(tempDir, "config.json")
-	err := os.WriteFile(jsonFile, []byte(`{"level": "info"}`), 0o644)
+	err := os.WriteFile(jsonFile, []byte(`{"level": "info", "format": "json"}`), 0o644)
 	require.NoError(t, err)
 
-	_, err = FromConfigFile(jsonFile)
-	asrt.Error(err)
-	asrt.Contains(err.Error(), "JSON format not supported")
+	logger, err := FromConfigFile(jsonFile)
+	asrt.NoError(err)
+	asrt.NotNil(logger)
+	asrt.Equal("info", logger.opts.Level)
+	asrt.Equal("json", logger.opts.Format)
 
-	// Test TOML file (should fail)
+	// Test TOML file (should work with viper)
 	tomlFile := filepath.Join(tempDir, "config.toml")
-	err = os.WriteFile(tomlFile, []byte(`level = "info"`), 0o644)
+	err = os.WriteFile(tomlFile, []byte(`level = "debug"
+format = "console"`), 0o644)
 	require.NoError(t, err)
 
-	_, err = FromConfigFile(tomlFile)
-	asrt.Error(err)
-	asrt.Contains(err.Error(), "TOML format not supported")
+	logger, err = FromConfigFile(tomlFile)
+	asrt.NoError(err)
+	asrt.NotNil(logger)
+	asrt.Equal("debug", logger.opts.Level)
+	asrt.Equal("console", logger.opts.Format)
 }
 
 // ============================================================================

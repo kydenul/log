@@ -16,7 +16,7 @@
 //   - Optional caller information and stack traces
 //   - Environment presets for development, production, and testing
 //   - Builder pattern for fluent configuration
-//   - YAML configuration support
+//   - Multi-format configuration support (YAML, JSON, TOML) via Viper
 //   - HTTP middleware for request/response logging
 //   - Performance optimizations (buffering, sampling)
 //
@@ -48,10 +48,16 @@
 //	logger.Errorf("Failed to connect to %s: %v", host, err)
 //
 // Configuration:
-// The logger can be configured through multiple methods:
+// The logger can be configured through multiple methods and formats:
 //
-//	// YAML configuration
-//	logger, err := log.FromConfigFile("config.yaml")
+//	// Multi-format configuration (powered by Viper)
+//	logger, err := log.FromConfigFile("config.yaml") // YAML format
+//	logger, err := log.FromConfigFile("config.json") // JSON format
+//	logger, err := log.FromConfigFile("config.toml") // TOML format
+//
+//	// Direct options loading
+//	opts, err := log.LoadFromFile("config.yaml")
+//	logger := log.NewLog(opts)
 //
 //	// Traditional options
 //	logger := log.NewLog(log.NewOptions().
