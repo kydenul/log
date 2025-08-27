@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.uber.org/zap/zapcore"
 
@@ -34,26 +35,40 @@ const (
 	DefaultMaxSize    = 100   // 100MB
 	DefaultMaxBackups = 3     // Keep 3 old log files
 	DefaultCompress   = false // Not compress rotated log files
+
+	// New defaults for enhanced functionality
+	DefaultBufferSize       = 1024        // 1KB buffer size
+	DefaultFlushInterval    = time.Second // 1 second flush interval
+	DefaultEnableSampling   = false       // Sampling disabled by default
+	DefaultSampleInitial    = 100         // Initial sample count
+	DefaultSampleThereafter = 100         // Subsequent sample count
 )
 
 // Options for logger
 type Options struct {
-	Prefix    string // Log Prefix, e.g ZIWI
-	Directory string // Log File Directory, e.g logs
-	Filename  string // Log filename prefix, e.g "myapp" generates "myapp-2025-07-20.log"
+	Prefix     string `json:"prefix,omitempty"      yaml:"prefix,omitempty"`      // Log Prefix, e.g ZIWI
+	Directory  string `json:"directory,omitempty"   yaml:"directory,omitempty"`   // Log File Directory, e.g logs
+	Filename   string `json:"filename,omitempty"    yaml:"filename,omitempty"`    // Log filename prefix, e.g "ziwi"
+	Level      string `json:"level,omitempty"       yaml:"level,omitempty"`       // Log Level, "debug", "info", "warn", "error"
+	TimeLayout string `json:"time_layout,omitempty" yaml:"time_layout,omitempty"` // Time Layout, e.g "2006-01-02 15:04:05.000"
+	Format     string `json:"format,omitempty"      yaml:"format,omitempty"`      // Log Format, "console", "json"
 
-	Level      string // Log Level, "debug", "info", "warn", "error"
-	TimeLayout string // Time Layout, e.g "2006-01-02 15:04:05.000"
-	Format     string // Log Format, "console", "json"
-
-	DisableCaller     bool // Disable caller information
-	DisableStacktrace bool // Disable stack traces
-	DisableSplitError bool // Disable separate error log files
+	DisableCaller     bool `json:"disable_caller,omitempty"      yaml:"disable_caller,omitempty"`      // Disable caller information
+	DisableStacktrace bool `json:"disable_stacktrace,omitempty"  yaml:"disable_stacktrace,omitempty"`  // Disable stack traces
+	DisableSplitError bool `json:"disable_split_error,omitempty" yaml:"disable_split_error,omitempty"` // Disable separate error log files
 
 	// Log rotation settings
-	MaxSize    int  // Maximum size of log files in megabytes before rotation
-	MaxBackups int  // Maximum number of old log files to retain
-	Compress   bool // Whether to compress rotated log files
+	MaxSize    int  `json:"max_size,omitempty"    yaml:"max_size,omitempty"`    // Maximum size of log files in megabytes before rotation
+	MaxBackups int  `json:"max_backups,omitempty" yaml:"max_backups,omitempty"` // Maximum number of old log files to retain
+	Compress   bool `json:"compress,omitempty"    yaml:"compress,omitempty"`    // Whether to compress rotated log files
+
+	// Enhanced functionality settings
+	BufferSize    int           `json:"buffer_size,omitempty"    yaml:"buffer_size,omitempty"`    // Buffer size for log writes
+	FlushInterval time.Duration `json:"flush_interval,omitempty" yaml:"flush_interval,omitempty"` // Interval for flushing buffered logs
+
+	EnableSampling   bool `json:"enable_sampling,omitempty"   yaml:"enable_sampling,omitempty"`   // Enable log sampling
+	SampleInitial    int  `json:"sample_initial,omitempty"    yaml:"sample_initial,omitempty"`    // Initial sample count
+	SampleThereafter int  `json:"sample_thereafter,omitempty" yaml:"sample_thereafter,omitempty"` // Subsequent sample count
 }
 
 // NewOptions return the default Options.
@@ -75,6 +90,13 @@ type Options struct {
 //	MaxSize:    100, // 100MB
 //	MaxBackups: 3,   // Keep 3 old log files
 //	Compress:   false,
+//
+//	// Enhanced functionality settings
+//	BufferSize:       1024,        // 1KB buffer
+//	FlushInterval:    time.Second, // 1 second flush interval
+//	EnableSampling:   false,       // Sampling disabled by default
+//	SampleInitial:    100,         // Initial sample count
+//	SampleThereafter: 100,         // Subsequent sample count
 func NewOptions() *Options {
 	opt := &Options{
 		Prefix:    DefaultPrefix,
@@ -93,6 +115,13 @@ func NewOptions() *Options {
 		MaxSize:    DefaultMaxSize,
 		MaxBackups: DefaultMaxBackups,
 		Compress:   DefaultCompress,
+
+		// Enhanced functionality settings
+		BufferSize:       DefaultBufferSize,
+		FlushInterval:    DefaultFlushInterval,
+		EnableSampling:   DefaultEnableSampling,
+		SampleInitial:    DefaultSampleInitial,
+		SampleThereafter: DefaultSampleThereafter,
 	}
 
 	if err := opt.Validate(); err != nil {
@@ -187,6 +216,39 @@ func (opt *Options) WithCompress(compress bool) *Options {
 	return opt
 }
 
+func (opt *Options) WithBufferSize(size int) *Options {
+	if size > 0 {
+		opt.BufferSize = size
+	} else {
+		opt.BufferSize = DefaultBufferSize
+	}
+	return opt
+}
+
+func (opt *Options) WithFlushInterval(interval time.Duration) *Options {
+	if interval > 0 {
+		opt.FlushInterval = interval
+	} else {
+		opt.FlushInterval = DefaultFlushInterval
+	}
+	return opt
+}
+
+func (opt *Options) WithSampling(enable bool, initial, thereafter int) *Options {
+	opt.EnableSampling = enable
+	if initial > 0 {
+		opt.SampleInitial = initial
+	} else {
+		opt.SampleInitial = DefaultSampleInitial
+	}
+	if thereafter > 0 {
+		opt.SampleThereafter = thereafter
+	} else {
+		opt.SampleThereafter = DefaultSampleThereafter
+	}
+	return opt
+}
+
 // isValidLevelString checks if the provided level string is valid
 func isValidLevelString(level string) bool {
 	return level == zapcore.DebugLevel.String() ||
@@ -229,6 +291,24 @@ func (opt *Options) Validate() error {
 
 	if opt.MaxBackups <= 0 {
 		return fmt.Errorf("invalid max backups: %d, expected: > 0", opt.MaxBackups)
+	}
+
+	// Validate enhanced functionality fields
+	if opt.BufferSize < 0 {
+		return fmt.Errorf("invalid buffer size: %d, expected: >= 0", opt.BufferSize)
+	}
+
+	if opt.FlushInterval < 0 {
+		return fmt.Errorf("invalid flush interval: %v, expected: >= 0", opt.FlushInterval)
+	}
+
+	if opt.EnableSampling {
+		if opt.SampleInitial <= 0 {
+			return fmt.Errorf("invalid sample initial: %d, expected: > 0", opt.SampleInitial)
+		}
+		if opt.SampleThereafter <= 0 {
+			return fmt.Errorf("invalid sample thereafter: %d, expected: > 0", opt.SampleThereafter)
+		}
 	}
 
 	return nil

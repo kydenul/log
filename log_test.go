@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLog_Option(t *testing.T) {
@@ -2449,4 +2450,931 @@ func TestBackwardCompatibility_PublicAPI(t *testing.T) {
 	mainInfo, err := os.Stat(expectedMainFile)
 	asrt.NoError(err, "Main log file should exist with default naming")
 	asrt.True(mainInfo.Size() > 0, "Main log file should have content")
+}
+
+// ============================================================================
+// YAML Configuration Tests (migrated from config_test.go)
+// ============================================================================
+
+func TestLoadFromYAML(t *testing.T) {
+	// Create a temporary YAML config file
+	tempDir := t.TempDir()
+	yamlFile := filepath.Join(tempDir, "test_config.yaml")
+
+	yamlContent := `
+prefix: "YAML_"
+directory: "/yaml/logs"
+level: "debug"
+format: "json"
+max_size: 150
+compress: true
+`
+
+	err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromYAML function
+	opts, err := LoadFromYAML(yamlFile)
+	require.NoError(t, err)
+	require.NotNil(t, opts)
+
+	assert.Equal(t, "YAML_", opts.Prefix)
+	assert.Equal(t, "/yaml/logs", opts.Directory)
+	assert.Equal(t, "debug", opts.Level)
+	assert.Equal(t, "json", opts.Format)
+	assert.Equal(t, 150, opts.MaxSize)
+	assert.True(t, opts.Compress)
+}
+
+func TestLoadFromYAMLFileNotFound(t *testing.T) {
+	// Test with non-existent file
+	opts, err := LoadFromYAML("/non/existent/file.yaml")
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "failed to read YAML configuration file")
+}
+
+func TestLoadFromYAMLInvalidContent(t *testing.T) {
+	// Create a temporary file with invalid YAML content
+	tempDir := t.TempDir()
+	yamlFile := filepath.Join(tempDir, "invalid.yaml")
+
+	invalidYamlContent := `
+prefix: "TEST_"
+level: debug
+invalid_yaml: [unclosed array
+`
+
+	err := os.WriteFile(yamlFile, []byte(invalidYamlContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromYAML function with invalid content
+	opts, err := LoadFromYAML(yamlFile)
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "failed to parse YAML config")
+}
+
+func TestLoadFromFileYAML(t *testing.T) {
+	// Create a temporary YAML config file
+	tempDir := t.TempDir()
+	yamlFile := filepath.Join(tempDir, "test_config.yaml")
+
+	yamlContent := `
+prefix: "FILE_"
+level: "info"
+`
+
+	err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromFile function with YAML extension
+	opts, err := LoadFromFile(yamlFile)
+	require.NoError(t, err)
+	require.NotNil(t, opts)
+
+	assert.Equal(t, "FILE_", opts.Prefix)
+	assert.Equal(t, "info", opts.Level)
+}
+
+func TestLoadFromFileYML(t *testing.T) {
+	// Create a temporary YML config file
+	tempDir := t.TempDir()
+	ymlFile := filepath.Join(tempDir, "test_config.yml")
+
+	ymlContent := `
+prefix: "YML_"
+level: "warn"
+`
+
+	err := os.WriteFile(ymlFile, []byte(ymlContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromFile function with YML extension
+	opts, err := LoadFromFile(ymlFile)
+	require.NoError(t, err)
+	require.NotNil(t, opts)
+
+	assert.Equal(t, "YML_", opts.Prefix)
+	assert.Equal(t, "warn", opts.Level)
+}
+
+func TestLoadFromFileJSON(t *testing.T) {
+	// Test LoadFromFile function with JSON extension
+	opts, err := LoadFromFile("config.json")
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "JSON format not supported")
+}
+
+func TestLoadFromFileTOML(t *testing.T) {
+	// Test LoadFromFile function with TOML extension
+	opts, err := LoadFromFile("config.toml")
+	assert.Error(t, err)
+	assert.Nil(t, opts)
+	assert.Contains(t, err.Error(), "TOML format not supported")
+}
+
+func TestLoadFromFileUnknownExtension(t *testing.T) {
+	// Create a temporary file with unknown extension but valid YAML content
+	tempDir := t.TempDir()
+	unknownFile := filepath.Join(tempDir, "test_config.conf")
+
+	yamlContent := `
+prefix: "UNKNOWN_"
+level: "error"
+`
+
+	err := os.WriteFile(unknownFile, []byte(yamlContent), 0o644)
+	require.NoError(t, err)
+
+	// Test LoadFromFile function with unknown extension (should default to YAML)
+	opts, err := LoadFromFile(unknownFile)
+	require.NoError(t, err)
+	require.NotNil(t, opts)
+
+	assert.Equal(t, "UNKNOWN_", opts.Prefix)
+	assert.Equal(t, "error", opts.Level)
+}
+
+// Comprehensive tests for configuration management system
+func TestLoadFromYAML_ValidConfiguration(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+	yamlFile := filepath.Join(tempDir, "valid_config.yaml")
+
+	yamlContent := `
+prefix: "YAML_"
+directory: "/tmp/yaml-logs"
+filename: "yaml-app"
+level: "debug"
+time_layout: "2006/01/02 15:04:05"
+format: "json"
+disable_caller: true
+disable_stacktrace: false
+disable_split_error: true
+max_size: 150
+max_backups: 8
+compress: true
+buffer_size: 4096
+flush_interval: "10s"
+enable_sampling: true
+sample_initial: 200
+sample_thereafter: 2000
+`
+
+	err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644)
+	require.NoError(t, err)
+
+	opts, err := LoadFromYAML(yamlFile)
+	asrt.NoError(err)
+	asrt.NotNil(opts)
+
+	// Verify all fields were loaded correctly
+	asrt.Equal("YAML_", opts.Prefix)
+	asrt.Equal("/tmp/yaml-logs", opts.Directory)
+	asrt.Equal("yaml-app", opts.Filename)
+	asrt.Equal("debug", opts.Level)
+	asrt.Equal("2006/01/02 15:04:05", opts.TimeLayout)
+	asrt.Equal("json", opts.Format)
+	asrt.True(opts.DisableCaller)
+	asrt.False(opts.DisableStacktrace)
+	asrt.True(opts.DisableSplitError)
+	asrt.Equal(150, opts.MaxSize)
+	asrt.Equal(8, opts.MaxBackups)
+	asrt.True(opts.Compress)
+	asrt.Equal(4096, opts.BufferSize)
+	asrt.Equal(10*time.Second, opts.FlushInterval)
+	asrt.True(opts.EnableSampling)
+	asrt.Equal(200, opts.SampleInitial)
+	asrt.Equal(2000, opts.SampleThereafter)
+
+	// Configuration should be valid
+	err = opts.Validate()
+	asrt.NoError(err)
+}
+
+func TestLoadFromYAML_MinimalConfiguration(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+	yamlFile := filepath.Join(tempDir, "minimal_config.yaml")
+
+	yamlContent := `
+level: "warn"
+format: "console"
+`
+
+	err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644)
+	require.NoError(t, err)
+
+	opts, err := LoadFromYAML(yamlFile)
+	asrt.NoError(err)
+	asrt.NotNil(opts)
+
+	// Specified values should be loaded
+	asrt.Equal("warn", opts.Level)
+	asrt.Equal("console", opts.Format)
+
+	// Unspecified values should have defaults
+	asrt.Equal(DefaultPrefix, opts.Prefix)
+	asrt.Equal(DefaultDirectory, opts.Directory)
+	asrt.Equal(DefaultBufferSize, opts.BufferSize)
+	asrt.Equal(DefaultFlushInterval, opts.FlushInterval)
+}
+
+func TestLoadFromYAML_InvalidFile(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test nonexistent file
+	_, err := LoadFromYAML("nonexistent.yaml")
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "failed to read YAML configuration file")
+
+	// Test invalid YAML syntax
+	tempDir := t.TempDir()
+	invalidFile := filepath.Join(tempDir, "invalid.yaml")
+	err = os.WriteFile(invalidFile, []byte("invalid: yaml: [content"), 0o644)
+	require.NoError(t, err)
+
+	_, err = LoadFromYAML(invalidFile)
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "failed to parse YAML config")
+}
+
+func TestLoadFromYAML_InvalidConfiguration(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+	invalidConfigFile := filepath.Join(tempDir, "invalid_config.yaml")
+
+	// YAML with invalid configuration values
+	yamlContent := `
+level: "invalid_level"
+format: "invalid_format"
+max_size: -1
+max_backups: 0
+buffer_size: -100
+flush_interval: "-1s"
+`
+
+	err := os.WriteFile(invalidConfigFile, []byte(yamlContent), 0o644)
+	require.NoError(t, err)
+
+	_, err = LoadFromYAML(invalidConfigFile)
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "invalid YAML configuration")
+}
+
+func TestLoadFromFile_FormatDetection(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+
+	testCases := []struct {
+		name        string
+		filename    string
+		content     string
+		shouldError bool
+		errorMsg    string
+	}{
+		{
+			"YAML with .yaml extension",
+			"config.yaml",
+			"level: info\nformat: json",
+			false,
+			"",
+		},
+		{
+			"YAML with .yml extension",
+			"config.yml",
+			"level: debug\nformat: console",
+			false,
+			"",
+		},
+		{
+			"JSON file (not supported)",
+			"config.json",
+			`{"level": "info"}`,
+			true,
+			"JSON format not supported",
+		},
+		{
+			"TOML file (not supported)",
+			"config.toml",
+			`level = "info"`,
+			true,
+			"TOML format not supported",
+		},
+		{
+			"Unknown extension defaults to YAML",
+			"config.conf",
+			"level: warn\nformat: console",
+			false,
+			"",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			configFile := filepath.Join(tempDir, tc.filename)
+			err := os.WriteFile(configFile, []byte(tc.content), 0o644)
+			require.NoError(t, err)
+
+			opts, err := LoadFromFile(configFile)
+
+			if tc.shouldError {
+				asrt.Error(err)
+				asrt.Contains(err.Error(), tc.errorMsg)
+				asrt.Nil(opts)
+			} else {
+				asrt.NoError(err)
+				asrt.NotNil(opts)
+			}
+		})
+	}
+}
+
+func TestQuick(t *testing.T) {
+	logger := Quick()
+	if logger == nil {
+		t.Fatal("Quick() returned nil logger")
+	}
+
+	// Test that we can log without errors
+	logger.Info("Test message from Quick()")
+}
+
+func TestWithPreset(t *testing.T) {
+	tests := []struct {
+		name   string
+		preset Preset
+	}{
+		{"Development", DevelopmentPreset()},
+		{"Production", ProductionPreset()},
+		{"Testing", TestingPreset()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := WithPreset(tt.preset)
+			if logger == nil {
+				t.Fatalf("WithPreset(%s) returned nil logger", tt.name)
+			}
+
+			// Test that we can log without errors
+			logger.Info("Test message from preset:", tt.name)
+		})
+	}
+}
+
+func TestFromConfigFile(t *testing.T) {
+	// Create a temporary config file
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "test_config.yaml")
+
+	configContent := `
+level: debug
+format: json
+directory: ` + tempDir + `
+filename: test
+prefix: TEST_
+disable_caller: true
+max_size: 50
+max_backups: 2
+compress: true
+buffer_size: 2048
+flush_interval: 2s
+enable_sampling: true
+sample_initial: 50
+sample_thereafter: 200
+`
+
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
+	logger, err := FromConfigFile(configFile)
+	if err != nil {
+		t.Fatalf("FromConfigFile() failed: %v", err)
+	}
+	if logger == nil {
+		t.Fatal("FromConfigFile() returned nil logger")
+	}
+
+	// Test that we can log without errors
+	logger.Info("Test message from config file")
+}
+
+func TestFromConfigFileInvalidFile(t *testing.T) {
+	_, err := FromConfigFile("nonexistent.yaml")
+	if err == nil {
+		t.Fatal("FromConfigFile() should fail for nonexistent file")
+	}
+}
+
+func TestFromConfigFile_ValidYAML(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "valid_config.yaml")
+
+	configContent := `
+level: warn
+format: console
+directory: ` + tempDir + `
+filename: valid_test
+prefix: VALID_
+disable_caller: false
+max_size: 100
+max_backups: 5
+compress: false
+buffer_size: 4096
+flush_interval: 1s
+enable_sampling: false
+sample_initial: 100
+sample_thereafter: 500
+`
+
+	err := os.WriteFile(configFile, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	logger, err := FromConfigFile(configFile)
+	asrt.NoError(err)
+	asrt.NotNil(logger)
+
+	// Verify logger configuration
+	asrt.NotNil(logger.opts)
+	asrt.Equal("warn", logger.opts.Level)
+	asrt.Equal("console", logger.opts.Format)
+	asrt.Equal(tempDir, logger.opts.Directory)
+	asrt.Equal("valid_test", logger.opts.Filename)
+	asrt.Equal("VALID_", logger.opts.Prefix)
+	asrt.False(logger.opts.DisableCaller)
+	asrt.Equal(100, logger.opts.MaxSize)
+	asrt.Equal(5, logger.opts.MaxBackups)
+	asrt.False(logger.opts.Compress)
+	asrt.Equal(4096, logger.opts.BufferSize)
+	asrt.Equal(1*time.Second, logger.opts.FlushInterval)
+	asrt.False(logger.opts.EnableSampling)
+	asrt.Equal(100, logger.opts.SampleInitial)
+	asrt.Equal(500, logger.opts.SampleThereafter)
+
+	// Test logging
+	logger.Warn("Test warning message")
+	logger.Sync()
+}
+
+func TestFromConfigFile_MinimalYAML(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "minimal_config.yaml")
+
+	// Minimal config with just level
+	configContent := `level: error`
+
+	err := os.WriteFile(configFile, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	logger, err := FromConfigFile(configFile)
+	asrt.NoError(err)
+	asrt.NotNil(logger)
+
+	// Should use defaults for unspecified values
+	asrt.Equal("error", logger.opts.Level)
+
+	logger.Error("Test error message")
+	logger.Sync()
+}
+
+func TestFromConfigFile_InvalidFile(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test nonexistent file
+	_, err := FromConfigFile("nonexistent.yaml")
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "failed to load YAML configuration from file")
+
+	// Test invalid YAML
+	tempDir := t.TempDir()
+	invalidFile := filepath.Join(tempDir, "invalid.yaml")
+	err = os.WriteFile(invalidFile, []byte("invalid: yaml: content: ["), 0o644)
+	require.NoError(t, err)
+
+	_, err = FromConfigFile(invalidFile)
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "failed to load YAML configuration from file")
+}
+
+func TestFromConfigFile_UnsupportedFormats(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+
+	// Test JSON file (should fail)
+	jsonFile := filepath.Join(tempDir, "config.json")
+	err := os.WriteFile(jsonFile, []byte(`{"level": "info"}`), 0o644)
+	require.NoError(t, err)
+
+	_, err = FromConfigFile(jsonFile)
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "JSON format not supported")
+
+	// Test TOML file (should fail)
+	tomlFile := filepath.Join(tempDir, "config.toml")
+	err = os.WriteFile(tomlFile, []byte(`level = "info"`), 0o644)
+	require.NoError(t, err)
+
+	_, err = FromConfigFile(tomlFile)
+	asrt.Error(err)
+	asrt.Contains(err.Error(), "TOML format not supported")
+}
+
+// ============================================================================
+// Preset Tests (migrated from presets_test.go)
+// ============================================================================
+
+func TestDevelopmentPreset(t *testing.T) {
+	preset := DevelopmentPreset()
+
+	// Test preset metadata
+	if preset.Name() != "Development" {
+		t.Errorf("Expected preset name 'Development', got '%s'", preset.Name())
+	}
+
+	if preset.Description() == "" {
+		t.Error("Expected non-empty description")
+	}
+
+	// Test preset configuration
+	opts := NewOptions()
+	preset.Apply(opts)
+
+	// Verify development-specific settings
+	if opts.Level != "debug" {
+		t.Errorf("Expected level 'debug', got '%s'", opts.Level)
+	}
+
+	if opts.Format != "console" {
+		t.Errorf("Expected format 'console', got '%s'", opts.Format)
+	}
+
+	if opts.DisableCaller != false {
+		t.Error("Expected DisableCaller to be false in development")
+	}
+
+	if opts.DisableStacktrace != false {
+		t.Error("Expected DisableStacktrace to be false in development")
+	}
+
+	if opts.DisableSplitError != true {
+		t.Error("Expected DisableSplitError to be true in development")
+	}
+
+	if opts.MaxSize != 10 {
+		t.Errorf("Expected MaxSize 10, got %d", opts.MaxSize)
+	}
+
+	if opts.MaxBackups != 1 {
+		t.Errorf("Expected MaxBackups 1, got %d", opts.MaxBackups)
+	}
+
+	if opts.Compress != false {
+		t.Error("Expected Compress to be false in development")
+	}
+
+	// Verify enhanced settings
+	if opts.BufferSize != 512 {
+		t.Errorf("Expected BufferSize 512, got %d", opts.BufferSize)
+	}
+
+	if opts.FlushInterval != 100*time.Millisecond {
+		t.Errorf("Expected FlushInterval 100ms, got %v", opts.FlushInterval)
+	}
+
+	if opts.EnableSampling != false {
+		t.Error("Expected EnableSampling to be false in development")
+	}
+}
+
+func TestProductionPreset(t *testing.T) {
+	preset := ProductionPreset()
+
+	// Test preset metadata
+	if preset.Name() != "Production" {
+		t.Errorf("Expected preset name 'Production', got '%s'", preset.Name())
+	}
+
+	if preset.Description() == "" {
+		t.Error("Expected non-empty description")
+	}
+
+	// Test preset configuration
+	opts := NewOptions()
+	preset.Apply(opts)
+
+	// Verify production-specific settings
+	if opts.Level != "info" {
+		t.Errorf("Expected level 'info', got '%s'", opts.Level)
+	}
+
+	if opts.Format != "json" {
+		t.Errorf("Expected format 'json', got '%s'", opts.Format)
+	}
+
+	if opts.DisableCaller != true {
+		t.Error("Expected DisableCaller to be true in production")
+	}
+
+	if opts.DisableStacktrace != true {
+		t.Error("Expected DisableStacktrace to be true in production")
+	}
+
+	if opts.DisableSplitError != false {
+		t.Error("Expected DisableSplitError to be false in production")
+	}
+
+	if opts.MaxSize != 100 {
+		t.Errorf("Expected MaxSize 100, got %d", opts.MaxSize)
+	}
+
+	if opts.MaxBackups != 5 {
+		t.Errorf("Expected MaxBackups 5, got %d", opts.MaxBackups)
+	}
+
+	if opts.Compress != true {
+		t.Error("Expected Compress to be true in production")
+	}
+
+	// Verify enhanced settings
+	if opts.BufferSize != 2048 {
+		t.Errorf("Expected BufferSize 2048, got %d", opts.BufferSize)
+	}
+
+	if opts.FlushInterval != 5*time.Second {
+		t.Errorf("Expected FlushInterval 5s, got %v", opts.FlushInterval)
+	}
+
+	if opts.EnableSampling != true {
+		t.Error("Expected EnableSampling to be true in production")
+	}
+
+	if opts.SampleInitial != 100 {
+		t.Errorf("Expected SampleInitial 100, got %d", opts.SampleInitial)
+	}
+
+	if opts.SampleThereafter != 1000 {
+		t.Errorf("Expected SampleThereafter 1000, got %d", opts.SampleThereafter)
+	}
+}
+
+func TestTestingPreset(t *testing.T) {
+	preset := TestingPreset()
+
+	// Test preset metadata
+	if preset.Name() != "Testing" {
+		t.Errorf("Expected preset name 'Testing', got '%s'", preset.Name())
+	}
+
+	if preset.Description() == "" {
+		t.Error("Expected non-empty description")
+	}
+
+	// Test preset configuration
+	opts := NewOptions()
+	preset.Apply(opts)
+
+	// Verify testing-specific settings
+	if opts.Level != "debug" {
+		t.Errorf("Expected level 'debug', got '%s'", opts.Level)
+	}
+
+	if opts.Format != "console" {
+		t.Errorf("Expected format 'console', got '%s'", opts.Format)
+	}
+
+	if opts.DisableCaller != true {
+		t.Error("Expected DisableCaller to be true in testing")
+	}
+
+	if opts.DisableStacktrace != true {
+		t.Error("Expected DisableStacktrace to be true in testing")
+	}
+
+	if opts.DisableSplitError != true {
+		t.Error("Expected DisableSplitError to be true in testing")
+	}
+
+	if opts.MaxSize != 1 {
+		t.Errorf("Expected MaxSize 1, got %d", opts.MaxSize)
+	}
+
+	if opts.MaxBackups != 1 {
+		t.Errorf("Expected MaxBackups 1, got %d", opts.MaxBackups)
+	}
+
+	if opts.Compress != false {
+		t.Error("Expected Compress to be false in testing")
+	}
+
+	// Verify enhanced settings
+	if opts.BufferSize != 256 {
+		t.Errorf("Expected BufferSize 256, got %d", opts.BufferSize)
+	}
+
+	if opts.FlushInterval != 50*time.Millisecond {
+		t.Errorf("Expected FlushInterval 50ms, got %v", opts.FlushInterval)
+	}
+
+	if opts.EnableSampling != false {
+		t.Error("Expected EnableSampling to be false in testing")
+	}
+}
+
+func TestPresetApplyNilOptions(t *testing.T) {
+	preset := DevelopmentPreset()
+
+	// Should not panic when applying to nil options
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("Apply should not panic with nil options, got panic: %v", r)
+		}
+	}()
+
+	preset.Apply(nil)
+}
+
+func TestPresetWithNilConfigure(t *testing.T) {
+	preset := Preset{
+		name:        "Empty",
+		description: "Empty preset",
+		configure:   nil,
+	}
+
+	opts := NewOptions()
+	originalLevel := opts.Level
+
+	// Should not panic and should not modify options
+	preset.Apply(opts)
+
+	if opts.Level != originalLevel {
+		t.Error("Preset with nil configure should not modify options")
+	}
+}
+
+func TestPresetChaining(t *testing.T) {
+	opts := NewOptions()
+
+	// Apply development preset first
+	DevelopmentPreset().Apply(opts)
+	developmentLevel := opts.Level
+
+	// Then apply production preset
+	ProductionPreset().Apply(opts)
+	productionLevel := opts.Level
+
+	// Should have changed from development to production settings
+	if developmentLevel == productionLevel {
+		t.Error("Expected preset chaining to change configuration")
+	}
+
+	if opts.Level != "info" {
+		t.Errorf("Expected final level to be 'info', got '%s'", opts.Level)
+	}
+}
+
+func TestPresetIntegrationWithLogger(t *testing.T) {
+	// Create a temporary directory for test logs
+	tempDir, err := os.MkdirTemp("", "log_preset_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Test Development Preset
+	t.Run("DevelopmentPreset", func(t *testing.T) {
+		opts := NewOptions()
+		opts.WithDirectory(tempDir).WithFilename("dev_test")
+		DevelopmentPreset().Apply(opts)
+
+		// Verify the options are valid
+		if err := opts.Validate(); err != nil {
+			t.Errorf("Development preset options validation failed: %v", err)
+		}
+
+		// Create logger with development preset
+		logger := NewLog(opts)
+		if logger == nil {
+			t.Error("Failed to create logger with development preset")
+		}
+
+		// Test logging
+		logger.Debug("Development debug message")
+		logger.Info("Development info message")
+
+		// Verify log file was created
+		logFiles, err := filepath.Glob(filepath.Join(tempDir, "dev_test*.log"))
+		if err != nil {
+			t.Errorf("Failed to check log files: %v", err)
+		}
+		if len(logFiles) == 0 {
+			t.Error("No log files created with development preset")
+		}
+	})
+
+	// Test Production Preset
+	t.Run("ProductionPreset", func(t *testing.T) {
+		opts := NewOptions()
+		opts.WithDirectory(tempDir).WithFilename("prod_test")
+		ProductionPreset().Apply(opts)
+
+		// Verify the options are valid
+		if err := opts.Validate(); err != nil {
+			t.Errorf("Production preset options validation failed: %v", err)
+		}
+
+		// Create logger with production preset
+		logger := NewLog(opts)
+		if logger == nil {
+			t.Error("Failed to create logger with production preset")
+		}
+
+		// Test logging (debug should be filtered out in production)
+		logger.Debug("Production debug message - should not appear")
+		logger.Info("Production info message")
+		logger.Error("Production error message")
+
+		// Verify log files were created
+		logFiles, err := filepath.Glob(filepath.Join(tempDir, "prod_test*.log"))
+		if err != nil {
+			t.Errorf("Failed to check log files: %v", err)
+		}
+		if len(logFiles) == 0 {
+			t.Error("No log files created with production preset")
+		}
+	})
+
+	// Test Testing Preset
+	t.Run("TestingPreset", func(t *testing.T) {
+		opts := NewOptions()
+		opts.WithDirectory(tempDir).WithFilename("test_test")
+		TestingPreset().Apply(opts)
+
+		// Verify the options are valid
+		if err := opts.Validate(); err != nil {
+			t.Errorf("Testing preset options validation failed: %v", err)
+		}
+
+		// Create logger with testing preset
+		logger := NewLog(opts)
+		if logger == nil {
+			t.Error("Failed to create logger with testing preset")
+		}
+
+		// Test logging
+		logger.Debug("Testing debug message")
+		logger.Info("Testing info message")
+
+		// Verify log file was created
+		logFiles, err := filepath.Glob(filepath.Join(tempDir, "test_test*.log"))
+		if err != nil {
+			t.Errorf("Failed to check log files: %v", err)
+		}
+		if len(logFiles) == 0 {
+			t.Error("No log files created with testing preset")
+		}
+	})
+}
+
+func TestPresetOptionsValidation(t *testing.T) {
+	presets := []struct {
+		name   string
+		preset Preset
+	}{
+		{"Development", DevelopmentPreset()},
+		{"Production", ProductionPreset()},
+		{"Testing", TestingPreset()},
+	}
+
+	for _, tc := range presets {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := NewOptions()
+			tc.preset.Apply(opts)
+
+			if err := opts.Validate(); err != nil {
+				t.Errorf("%s preset produces invalid options: %v", tc.name, err)
+			}
+		})
+	}
 }

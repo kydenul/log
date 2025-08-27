@@ -1,0 +1,12 @@
+prefix: "FILE_"
+level: "info"
+format: "console"
+directory: "/tmp/example-logs"
+filename: "example"
+disable_caller: false
+max_size: 50
+max_backups: 3
+compress: true
+buffer_size: 2048
+flush_interval: "2s"
+enable_sampling: false
