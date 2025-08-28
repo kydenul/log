@@ -3665,3 +3665,90 @@ func TestSamplingIntegration(t *testing.T) {
 		logger.Sync()
 	})
 }
+
+func TestConsoleOutput_OptionsConfiguration(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test default value
+	opts := NewOptions()
+	asrt.True(opts.ConsoleOutput, "ConsoleOutput should be true by default")
+
+	// Test enabling console output
+	opts = NewOptions().WithConsoleOutput(true)
+	asrt.True(opts.ConsoleOutput, "ConsoleOutput should be true when explicitly enabled")
+
+	// Test disabling console output
+	opts = NewOptions().WithConsoleOutput(false)
+	asrt.False(opts.ConsoleOutput, "ConsoleOutput should be false when explicitly disabled")
+}
+
+func TestConsoleOutput_LoggerCreation(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test logger creation with console output enabled
+	opts := NewOptions().WithConsoleOutput(true)
+	logger := NewLog(opts)
+	asrt.NotNil(logger, "Logger should be created successfully with console output enabled")
+
+	// Test logger creation with console output disabled
+	opts = NewOptions().WithConsoleOutput(false)
+	logger = NewLog(opts)
+	asrt.NotNil(logger, "Logger should be created successfully with console output disabled")
+}
+
+func TestConsoleOutput_MethodChaining(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test method chaining with console output
+	opts := NewOptions().
+		WithPrefix("TEST_").
+		WithConsoleOutput(false).
+		WithLevel("debug").
+		WithFormat("json")
+
+	asrt.Equal("TEST_", opts.Prefix)
+	asrt.False(opts.ConsoleOutput)
+	asrt.Equal("debug", opts.Level)
+	asrt.Equal("json", opts.Format)
+}
+
+func TestConsoleOutput_Validation(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that ConsoleOutput doesn't affect validation
+	opts := NewOptions().WithConsoleOutput(false)
+	err := opts.Validate()
+	asrt.NoError(err, "Validation should pass with ConsoleOutput disabled")
+
+	opts = NewOptions().WithConsoleOutput(true)
+	err = opts.Validate()
+	asrt.NoError(err, "Validation should pass with ConsoleOutput enabled")
+}
+
+func TestConsoleOutput_FileWritingBehavior(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that file writing works regardless of console output setting
+
+	// Test with console output enabled
+	opts1 := NewOptions().WithConsoleOutput(true)
+	logger1 := NewLog(opts1)
+	asrt.NotNil(logger1, "Logger should be created with console output enabled")
+
+	// Test with console output disabled
+	opts2 := NewOptions().WithConsoleOutput(false)
+	logger2 := NewLog(opts2)
+	asrt.NotNil(logger2, "Logger should be created with console output disabled")
+
+	// Both loggers should have the same file writing capability
+	// The EncodeEntry method will always write to files regardless of console output setting
+	asrt.NotNil(logger1.opts, "Logger1 should have options")
+	asrt.NotNil(logger2.opts, "Logger2 should have options")
+	asrt.True(logger1.opts.ConsoleOutput, "Logger1 should have console output enabled")
+	asrt.False(logger2.opts.ConsoleOutput, "Logger2 should have console output disabled")
+}

@@ -101,6 +101,14 @@ func (b *Builder) Sampling(enable bool, initial, thereafter int) *Builder {
 	return b
 }
 
+// ConsoleOutput sets whether to output logs to console
+// When disabled, logs are only written to files
+// Returns the Builder for method chaining
+func (b *Builder) ConsoleOutput(enable bool) *Builder {
+	b.opts.WithConsoleOutput(enable) // Use existing method
+	return b
+}
+
 // Development applies the development preset configuration
 // This configures the logger for development environment with debug level,
 // console output, caller info enabled, and fast flush

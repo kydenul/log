@@ -30,6 +30,7 @@ func Test_NewOptions(t *testing.T) {
 	asrt.Equal(DefaultEnableSampling, opt.EnableSampling)
 	asrt.Equal(DefaultSampleInitial, opt.SampleInitial)
 	asrt.Equal(DefaultSampleThereafter, opt.SampleThereafter)
+	asrt.Equal(DefaultConsoleOutput, opt.ConsoleOutput)
 }
 
 func Test_Options_WithPrefix(t *testing.T) {
@@ -1103,4 +1104,62 @@ func TestOptions_EnhancedFields_SamplingDisabledValidation(t *testing.T) {
 	err = opts.Validate()
 	asrt.Error(err) // Should fail because sample values are invalid
 	asrt.Contains(err.Error(), "invalid sample initial")
+}
+
+func TestOptions_WithConsoleOutput(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test default value
+	opts := NewOptions()
+	asrt.Equal(DefaultConsoleOutput, opts.ConsoleOutput)
+	asrt.True(opts.ConsoleOutput) // Should be true by default
+
+	// Test enabling console output
+	opts = NewOptions().WithConsoleOutput(true)
+	asrt.True(opts.ConsoleOutput)
+
+	// Test disabling console output
+	opts = NewOptions().WithConsoleOutput(false)
+	asrt.False(opts.ConsoleOutput)
+
+	// Test method chaining
+	opts = NewOptions().
+		WithPrefix("test_").
+		WithConsoleOutput(false).
+		WithLevel("debug")
+	asrt.Equal("test_", opts.Prefix)
+	asrt.False(opts.ConsoleOutput)
+	asrt.Equal("debug", opts.Level)
+}
+
+func TestOptions_ConsoleOutput_DefaultConstant(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test that the default constant is properly set
+	asrt.True(DefaultConsoleOutput)
+
+	// Test that NewOptions uses the default constant
+	opts := NewOptions()
+	asrt.Equal(DefaultConsoleOutput, opts.ConsoleOutput)
+}
+
+func TestOptions_ConsoleOutput_Integration(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test console output with other options
+	opts := NewOptions().
+		WithConsoleOutput(false).
+		WithFormat("json").
+		WithLevel("error")
+
+	asrt.False(opts.ConsoleOutput)
+	asrt.Equal("json", opts.Format)
+	asrt.Equal("error", opts.Level)
+
+	// Validate should still pass
+	err := opts.Validate()
+	asrt.NoError(err)
 }

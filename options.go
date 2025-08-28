@@ -40,6 +40,9 @@ const (
 	DefaultSampleInitial    = 100   // Initial sample count
 	DefaultSampleThereafter = 100   // Subsequent sample count
 
+	// Console output control
+	DefaultConsoleOutput = true // Console output enabled by default
+
 	FormatConsole = "console"
 	FormatJSON    = "json"
 
@@ -75,6 +78,12 @@ type Options struct {
 	EnableSampling   bool `mapstructure:"enable_sampling"`
 	SampleInitial    int  `mapstructure:"sample_initial"`
 	SampleThereafter int  `mapstructure:"sample_thereafter"`
+
+	// -----------------
+	// Console output settings
+	// -----------------
+
+	ConsoleOutput bool `mapstructure:"console_output"` // Whether to output logs to console
 }
 
 // NewOptions return the default Options.
@@ -101,6 +110,9 @@ type Options struct {
 //	EnableSampling:   false, // Sampling disabled by default
 //	SampleInitial:    100,   // Initial sample count
 //	SampleThereafter: 100,   // Subsequent sample count
+//
+//	// Console output settings
+//	ConsoleOutput: true, // Console output enabled by default
 func NewOptions() *Options {
 	opt := &Options{
 		Prefix:    DefaultPrefix,
@@ -124,6 +136,9 @@ func NewOptions() *Options {
 		EnableSampling:   DefaultEnableSampling,
 		SampleInitial:    DefaultSampleInitial,
 		SampleThereafter: DefaultSampleThereafter,
+
+		// Console output settings
+		ConsoleOutput: DefaultConsoleOutput,
 	}
 
 	if err := opt.Validate(); err != nil {
@@ -230,6 +245,11 @@ func (opt *Options) WithSampling(enable bool, initial, thereafter int) *Options 
 	} else {
 		opt.SampleThereafter = DefaultSampleThereafter
 	}
+	return opt
+}
+
+func (opt *Options) WithConsoleOutput(enable bool) *Options {
+	opt.ConsoleOutput = enable
 	return opt
 }
 

@@ -93,6 +93,7 @@ func main() {
         Format("json").
         Directory("./logs").
         Filename("myapp").
+        ConsoleOutput(false).           // Disable console output
         Sampling(true, 100, 1000).
         Build()
     
@@ -103,6 +104,7 @@ func main() {
         Production().                    // Start with production preset
         Level("debug").                  // Override level for debugging
         Directory("/var/log/myapp").     // Custom log directory
+        ConsoleOutput(false).            // Disable console for production
         Build()
     
     logger2.Debug("Custom production logger")
@@ -181,6 +183,9 @@ max-size: 100
 max-backups: 5
 compress: true
 
+# Console output control
+console-output: true
+
 # Sampling (reduces log volume in high-traffic scenarios)
 enable-sampling: true
 sample-initial: 100
@@ -203,6 +208,7 @@ sample-thereafter: 1000
   "max_size": 100,
   "max_backups": 5,
   "compress": true,
+  "console_output": true,
   "enable_sampling": true,
   "sample_initial": 100,
   "sample_thereafter": 1000
@@ -228,6 +234,9 @@ disable_split_error = false
 max_size = 100
 max_backups = 5
 compress = true
+
+# Console output control
+console_output = true
 
 # Sampling (reduces log volume in high-traffic scenarios)
 enable_sampling = true
@@ -377,6 +386,57 @@ func main() {
 
 ## Key Features
 
+### Console Output Control
+
+The logger provides flexible control over console output while maintaining file logging:
+
+- **Independent control**: Console output can be enabled/disabled independently of file logging
+- **Default behavior**: Console output is enabled by default (`console_output: true`)
+- **Production optimization**: Disable console output in production to reduce performance overhead
+- **File logging preserved**: When console output is disabled, all logs still write to files
+
+**Usage examples:**
+
+```go
+// Enable console output (default behavior)
+logger := log.NewBuilder().
+    ConsoleOutput(true).
+    Build()
+
+// Disable console output (logs only to files)
+logger := log.NewBuilder().
+    ConsoleOutput(false).
+    Build()
+
+// Production setup with no console output
+prodLogger := log.NewBuilder().
+    Production().
+    ConsoleOutput(false).  // Override preset to disable console
+    Build()
+
+// Development setup with console output
+devLogger := log.NewBuilder().
+    Development().
+    ConsoleOutput(true).   // Explicitly enable (already default)
+    Build()
+```
+
+**Configuration file examples:**
+
+```yaml
+# Enable console output (default)
+console-output: true
+
+# Disable console output (production)
+console-output: false
+```
+
+```json
+{
+  "console_output": false
+}
+```
+
 ### Automatic File Management
 
 The logger automatically handles:
@@ -407,6 +467,7 @@ Choose from pre-configured environments:
 
 - Debug level logging
 - Console output format
+- **Console output enabled** (for immediate feedback)
 - Caller information enabled
 - Stack traces enabled
 - Fast flush for immediate feedback
@@ -420,6 +481,7 @@ logger := log.WithPreset(log.DevelopmentPreset())
 
 - Info level logging
 - JSON output format
+- **Console output enabled** (can be overridden)
 - Caller information disabled (performance)
 - Stack traces disabled (performance)
 - Log sampling enabled
@@ -433,6 +495,7 @@ logger := log.WithPreset(log.ProductionPreset())
 
 - Debug level logging
 - Console output format
+- **Console output enabled** (for test visibility)
 - Caller information disabled (cleaner output)
 - Stack traces disabled (cleaner output)
 - Fast flush for test verification
@@ -461,6 +524,7 @@ func main() {
     logger := log.NewBuilder().
         Production().
         Directory("/var/log/myservice").
+        ConsoleOutput(false).            // Disable console output for production
         Build()
     
     // Log service startup
@@ -607,19 +671,24 @@ if err != nil {
 
 1. **Use presets for common scenarios**: Start with `DevelopmentPreset()`, `ProductionPreset()`, or `TestingPreset()`
 
-2. **Use structured logging**: Prefer `logger.Infow("message", "key", "value")` over `logger.Infof("message %s", value)`
+2. **Control console output appropriately**: 
+   - **Development**: Keep console output enabled for immediate feedback
+   - **Production**: Consider disabling console output (`ConsoleOutput(false)`) to reduce performance overhead
+   - **Containers**: Enable console output if using container log aggregation, disable if using file-based logging
 
-3. **Handle errors gracefully**: Use `logutil.LogError()` and `logutil.CheckError()` for consistent error handling
+3. **Use structured logging**: Prefer `logger.Infow("message", "key", "value")` over `logger.Infof("message %s", value)`
 
-4. **Time critical operations**: Use `logutil.Timer()` or `logutil.TimeFunction()` for performance monitoring
+4. **Handle errors gracefully**: Use `logutil.LogError()` and `logutil.CheckError()` for consistent error handling
 
-5. **Use HTTP middleware**: Automatically log all HTTP requests and responses
+5. **Time critical operations**: Use `logutil.Timer()` or `logutil.TimeFunction()` for performance monitoring
 
-6. **Configure sampling for high-traffic services**: Enable sampling in production to manage log volume
+6. **Use HTTP middleware**: Automatically log all HTTP requests and responses
 
-7. **Use appropriate log levels**: Debug for development, Info for production events, Error for actual problems
+7. **Configure sampling for high-traffic services**: Enable sampling in production to manage log volume
 
-8. **Always call Sync()**: Call `logger.Sync()` or `log.Sync()` before application exit to flush buffers
+8. **Use appropriate log levels**: Debug for development, Info for production events, Error for actual problems
+
+9. **Always call Sync()**: Call `logger.Sync()` or `log.Sync()` before application exit to flush buffers
 
 ## Recent Updates
 

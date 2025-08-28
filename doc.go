@@ -10,6 +10,7 @@
 //   - Printf-style logging with format strings
 //   - Println-style logging
 //   - JSON and console output formats
+//   - Configurable console output (can be disabled independently of file logging)
 //   - Configurable time layout
 //   - Log file rotation by date
 //   - Separate error log files
@@ -35,6 +36,7 @@
 //	    Level("debug").
 //	    Format("json").
 //	    Directory("./logs").
+//	    ConsoleOutput(false).  // Disable console output
 //	    Build()
 //
 // Structured Logging:
@@ -63,7 +65,8 @@
 //	logger := log.NewLog(log.NewOptions().
 //	    WithLevel("debug").
 //	    WithFormat("json").
-//	    WithDirectory("./logs"))
+//	    WithDirectory("./logs").
+//	    WithConsoleOutput(false))  // Disable console output
 //
 // HTTP Middleware:
 //

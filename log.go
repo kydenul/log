@@ -24,6 +24,13 @@ const (
 	BriefDelay = time.Millisecond * 10 // Brief delay before retry
 )
 
+// discardWriter is a writer that discards all data written to it
+type discardWriter struct{}
+
+func (discardWriter) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
 var (
 	// Global logger instance using atomic.Value for lock-free access
 	defaultLogger atomic.Value // *ZiwiLog
@@ -142,10 +149,17 @@ func NewLog(opts *Options) *Log {
 	zapLevel := DefaultLevel
 	_ = zapLevel.UnmarshalText([]byte(opts.Level))
 
-	// Create base core
+	// Create base core with conditional console output
+	var writeSyncer zapcore.WriteSyncer
+	if opts.ConsoleOutput {
+		writeSyncer = zapcore.AddSync(os.Stdout) // Output to stdout
+	} else {
+		writeSyncer = zapcore.AddSync(&discardWriter{}) // Discard console output
+	}
+
 	core := zapcore.NewCore(
-		logger,                     // Our custom encoder
-		zapcore.AddSync(os.Stdout), // Output to stdout
+		logger,      // Our custom encoder
+		writeSyncer, // Conditional output
 		zap.NewAtomicLevelAt(zapLevel),
 	)
 

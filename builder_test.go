@@ -986,3 +986,31 @@ func ExampleBuilder_presetWithOverrides() {
 	logger.Info("Info message")
 	logger.Sync()
 }
+
+func TestBuilderConsoleOutput(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	// Test enabling console output
+	builder := NewBuilder().ConsoleOutput(true)
+	asrt.True(builder.opts.ConsoleOutput)
+
+	// Test disabling console output
+	builder = NewBuilder().ConsoleOutput(false)
+	asrt.False(builder.opts.ConsoleOutput)
+
+	// Test method chaining
+	builder = NewBuilder().
+		Level("debug").
+		ConsoleOutput(false).
+		Format("json")
+	asrt.Equal("debug", builder.opts.Level)
+	asrt.False(builder.opts.ConsoleOutput)
+	asrt.Equal("json", builder.opts.Format)
+
+	// Test with preset override
+	builder = NewBuilder().
+		Production().
+		ConsoleOutput(false) // Override preset
+	asrt.False(builder.opts.ConsoleOutput)
+}
