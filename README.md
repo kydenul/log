@@ -19,6 +19,7 @@ A high-performance, structured logging package for Go applications, built on top
 
 ### Enhanced Usability Features
 
+- **Dual calling modes** - Use both instance methods (`logger.Info()`) and global functions (`log.Info()`) seamlessly
 - **Zero-configuration quick start** - Get started with one line of code
 - **Environment presets** - Pre-configured settings for development, production, and testing
 - **Builder pattern** - Fluent API for easy configuration
@@ -46,11 +47,20 @@ import "github.com/kydenul/log"
 func main() {
     // Create logger with sensible defaults
     logger := log.Quick()
-    logger.Info("Hello, World!")
     
-    // Or use global functions (existing API still works)
-    log.Info("Hello, World!")
-    log.Infof("Processing item %d", 123)
+    // Both calling modes work with the same configuration:
+    
+    // Instance method calls
+    logger.Info("Hello from instance method!")
+    logger.Warn("Warning from instance method")
+    logger.Errorf("Error from instance: %v", err)
+    
+    // Global function calls (automatically use the same logger)
+    log.Info("Hello from global function!")
+    log.Warn("Warning from global function")
+    log.Errorf("Error from global: %v", err)
+    
+    // Both produce identical output with the same configuration
 }
 ```
 
@@ -305,15 +315,140 @@ The middleware automatically logs:
 - Request start with method, URL, remote address, user agent
 - Request completion with status code, duration, and timing
 
+## Dual Calling Modes
+
+One of the key features of this logging library is **dual calling modes** - you can use both instance methods and global functions seamlessly with the same configuration.
+
+### How It Works
+
+When you create a logger using any method (`NewLog()`, `Quick()`, `WithPreset()`, `FromConfigFile()`, `Builder.Build()`), it automatically becomes the global default logger. This means:
+
+- **Instance calls** like `logger.Info()` work directly on your logger instance
+- **Global calls** like `log.Info()` automatically use the same logger configuration
+- **Both produce identical output** with the same formatting, file destinations, and settings
+
+### Usage Examples
+
+```go
+package main
+
+import "github.com/kydenul/log"
+
+func main() {
+    // Create a custom logger
+    logger := log.NewBuilder().
+        Level("debug").
+        Format("json").
+        Directory("./logs").
+        Prefix("[MyApp] ").
+        Build()
+    
+    // Method 1: Instance method calls
+    logger.Info("User logged in", "user_id", 123)
+    logger.Warn("Rate limit approaching", "current", 95, "limit", 100)
+    logger.Error("Database connection failed", "error", err)
+    
+    // Method 2: Global function calls (same configuration automatically)
+    log.Info("User logged in", "user_id", 123)
+    log.Warn("Rate limit approaching", "current", 95, "limit", 100)
+    log.Error("Database connection failed", "error", err)
+    
+    // Both methods produce identical output:
+    // [MyApp] {"level":"info","ts":"2024-01-15T10:30:45.123Z","msg":"User logged in","user_id":123}
+}
+```
+
+**Complete Example**: See [`example/dual-calling/main.go`](example/dual-calling/main.go) for a comprehensive demonstration of dual calling modes with different logger creation methods.
+
+### All Logger Creation Methods Support Dual Calling
+
+```go
+// 1. Direct creation
+logger := log.NewLog(opts)
+logger.Info("Instance call")
+log.Info("Global call")  // Uses same config
+
+// 2. Quick setup
+logger := log.Quick()
+logger.Info("Instance call")
+log.Info("Global call")  // Uses same config
+
+// 3. Environment presets
+logger := log.WithPreset(log.ProductionPreset())
+logger.Info("Instance call")
+log.Info("Global call")  // Uses same config
+
+// 4. Configuration files
+logger, _ := log.FromConfigFile("config.yaml")
+logger.Info("Instance call")
+log.Info("Global call")  // Uses same config
+
+// 5. Builder pattern
+logger := log.NewBuilder().Level("debug").Build()
+logger.Info("Instance call")
+log.Info("Global call")  // Uses same config
+```
+
+### Multiple Logger Instances
+
+When you create multiple logger instances, the **most recently created** logger becomes the global default:
+
+```go
+// Create first logger
+logger1 := log.WithPreset(log.DevelopmentPreset())
+log.Info("Uses logger1 config")  // Development preset
+
+// Create second logger
+logger2 := log.WithPreset(log.ProductionPreset())
+log.Info("Uses logger2 config")  // Production preset (now global)
+
+// Instance methods still work independently
+logger1.Info("Still uses development config")
+logger2.Info("Still uses production config")
+```
+
+### Benefits of Dual Calling Modes
+
+1. **Flexibility**: Choose the calling style that fits your code structure
+2. **Migration friendly**: Existing code using global functions continues to work
+3. **Consistent configuration**: No need to pass logger instances everywhere
+4. **Team preferences**: Different team members can use their preferred style
+5. **Library integration**: Easy to integrate with existing libraries that expect global functions
+
+### When to Use Each Mode
+
+**Use instance methods (`logger.Info()`) when:**
+
+- You want explicit control over which logger to use
+- Working with dependency injection patterns
+- Building libraries that accept logger parameters
+- You have multiple loggers with different configurations
+
+**Use global functions (`log.Info()`) when:**
+
+- You have a single logger configuration for your application
+- Migrating from other logging libraries
+- You prefer the simplicity of global functions
+- Working with existing code that uses global logging
+
 ## Global Logger Functions
 
-The package provides global functions that use a default logger instance:
+The package provides global functions that automatically use the current default logger instance:
 
 ```go
 import "github.com/kydenul/log"
 
 func main() {
-    // Basic logging functions
+    // Configure the logger (automatically becomes global default)
+    logger := log.NewBuilder().
+        Level("debug").
+        Format("json").
+        Directory("./logs").
+        Build()
+    
+    // Now both calling modes work with the same configuration:
+    
+    // Global functions (use the logger configuration above)
     log.Debug("Debug message")
     log.Info("Info message")
     log.Warn("Warning message")
@@ -330,8 +465,13 @@ func main() {
     // Line-based logging
     log.Infoln("This", "is", "a", "line", "message")
     
-    // Replace the global logger
-    customLogger := log.NewBuilder().Level("debug").Build()
+    // Instance methods (same output as global functions)
+    logger.Debug("Debug message")
+    logger.Info("Info message")
+    logger.Infow("User action", "user_id", 123, "action", "login")
+    
+    // Manually replace the global logger (optional)
+    customLogger := log.NewBuilder().Level("info").Build()
     log.ReplaceLogger(customLogger)
     
     // Sync all loggers before exit
@@ -669,30 +809,53 @@ if err != nil {
 
 ## Best Practices
 
-1. **Use presets for common scenarios**: Start with `DevelopmentPreset()`, `ProductionPreset()`, or `TestingPreset()`
+1. **Choose your calling mode consistently**:
+   - Use **instance methods** (`logger.Info()`) when you need explicit control or multiple logger configurations
+   - Use **global functions** (`log.Info()`) for simple applications with a single logger configuration
+   - **Mix both modes** as needed - they work seamlessly together
 
-2. **Control console output appropriately**: 
+2. **Use presets for common scenarios**: Start with `DevelopmentPreset()`, `ProductionPreset()`, or `TestingPreset()`
+
+3. **Control console output appropriately**:
    - **Development**: Keep console output enabled for immediate feedback
    - **Production**: Consider disabling console output (`ConsoleOutput(false)`) to reduce performance overhead
    - **Containers**: Enable console output if using container log aggregation, disable if using file-based logging
 
-3. **Use structured logging**: Prefer `logger.Infow("message", "key", "value")` over `logger.Infof("message %s", value)`
+4. **Use structured logging**: Prefer `logger.Infow("message", "key", "value")` over `logger.Infof("message %s", value)`
 
-4. **Handle errors gracefully**: Use `logutil.LogError()` and `logutil.CheckError()` for consistent error handling
+5. **Handle errors gracefully**: Use `logutil.LogError()` and `logutil.CheckError()` for consistent error handling
 
-5. **Time critical operations**: Use `logutil.Timer()` or `logutil.TimeFunction()` for performance monitoring
+6. **Time critical operations**: Use `logutil.Timer()` or `logutil.TimeFunction()` for performance monitoring
 
-6. **Use HTTP middleware**: Automatically log all HTTP requests and responses
+7. **Use HTTP middleware**: Automatically log all HTTP requests and responses
 
-7. **Configure sampling for high-traffic services**: Enable sampling in production to manage log volume
+8. **Configure sampling for high-traffic services**: Enable sampling in production to manage log volume
 
-8. **Use appropriate log levels**: Debug for development, Info for production events, Error for actual problems
+9. **Use appropriate log levels**: Debug for development, Info for production events, Error for actual problems
 
-9. **Always call Sync()**: Call `logger.Sync()` or `log.Sync()` before application exit to flush buffers
+10. **Always call Sync()**: Call `logger.Sync()` or `log.Sync()` before application exit to flush buffers
+
+11. **Understand global logger behavior**: When creating multiple loggers, the most recent one becomes the global default. Use `log.ReplaceLogger()` if you need explicit control
 
 ## Recent Updates
 
-### Configuration Enhancement (Latest)
+### Dual Calling Modes (Latest)
+
+The logging library now supports **dual calling modes** for maximum flexibility:
+
+- **Seamless integration**: Use both `logger.Info()` and `log.Info()` with the same configuration
+- **Automatic global logger**: Any logger creation method automatically updates the global default
+- **Zero migration effort**: Existing code continues to work without changes
+- **Flexible usage**: Choose the calling style that fits your code structure
+- **Consistent output**: Both calling modes produce identical logs with the same formatting
+
+**Benefits**:
+
+- **Team flexibility**: Different developers can use their preferred calling style
+- **Library compatibility**: Easy integration with existing libraries expecting global functions
+- **Migration friendly**: Smooth transition from other logging libraries
+
+### Configuration Enhancement
 
 The logging library has been enhanced with **Viper integration** for improved configuration management:
 

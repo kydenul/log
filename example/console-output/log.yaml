@@ -1,0 +1,26 @@
+# Simple example YAML configuration for log library
+filename: "ziwi"        # Log filename prefix (generates files like ziwi-2025-07-20.log)
+prefix: "LOG_"           # Log prefix
+directory: "./logs"      # Log file directory
+level: "debug"           # Log level: debug / info / warn / error / dpanic / panic / fatal
+time_layout: "2006-01-02 15:04:05.000"
+format: "console"        # Log format: console / json
+
+disable_caller: false     # Disable caller: false / true
+disable_stacktrace: false # Disable stacktrace: false / true
+disable_split_error: false # Disable split error: false / true
+console_output: false
+
+# Log rotation settings
+max_size: 100            # Maximum size of log files in megabytes before rotation
+max_backups: 3           # Maximum number of old log files to retain
+compress: false          # Whether to compress rotated log files: false / true
+
+# Buffer settings
+buffer_size: 4096        # Buffer size for log writes
+flush_interval: "5s"     # Interval for flushing buffered logs
+
+# Sampling settings (disabled by default)
+enable_sampling: false   # Enable log sampling
+sample_initial: 100      # Initial sample count
+sample_thereafter: 1000  # Subsequent sample count

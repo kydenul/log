@@ -92,7 +92,8 @@ type Log struct {
 	mu        sync.RWMutex // protects file operations
 }
 
-// NewLog creates a new logger instance. It will initialize the global logger instance with the specified options.
+// NewLog creates a new logger instance and sets it as the global default logger.
+// This allows both instance-based calls (logger.Info()) and global calls (log.Info()).
 //
 // Returns:
 //
@@ -183,6 +184,10 @@ func NewLog(opts *Options) *Log {
 	// 7. Assign the zap logger to our ZiwiLog
 	logger.log = log
 	zap.RedirectStdLog(logger.log)
+
+	// 8. Set this logger as the global default logger
+	// This enables both logger.Info() and log.Info() usage patterns
+	ReplaceLogger(logger)
 
 	return logger
 }
