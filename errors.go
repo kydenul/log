@@ -242,31 +242,36 @@ func validateSampling(opts *Options) error {
 	return nil
 }
 
-// ensureDirectoryExists creates the directory if it doesn't exist and checks permissions
+// ensureDirectoryExists creates the directory if it doesn't exist and checks permissions.
+// Uses atomic file operations to avoid TOCTOU race conditions.
 func ensureDirectoryExists(dir string) error {
 	// Clean the path
 	dir = filepath.Clean(dir)
 
-	// Check if directory already exists
-	if info, err := os.Stat(dir); err == nil {
-		if !info.IsDir() {
-			return fmt.Errorf("路径存在但不是目录: %s", dir)
-		}
-		// Check if we can write to the directory
-		testFile := filepath.Join(dir, ".write_test")
-		if f, err := os.Create(testFile); err != nil { //nolint:gosec
-			return fmt.Errorf("目录不可写: %s", dir)
-		} else {
-			f.Close()           //nolint:gosec
-			os.Remove(testFile) //nolint:gosec
-		}
-		return nil
+	// Try to create the directory first (MkdirAll is idempotent)
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec
+		return fmt.Errorf("cannot create directory: %s: %v", dir, err)
 	}
 
-	// Try to create the directory
-	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec
-		return fmt.Errorf("无法创建目录: %s: %v", dir, err)
+	// Check if path is actually a directory
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("cannot stat directory: %s: %v", dir, err)
 	}
+	if !info.IsDir() {
+		return fmt.Errorf("path exists but is not a directory: %s", dir)
+	}
+
+	// Check write permission using atomic file creation with unique name
+	// This avoids TOCTOU race by using process ID and timestamp
+	testFile := filepath.Join(dir, fmt.Sprintf(".write_test_%d_%d", os.Getpid(), time.Now().UnixNano()))
+	f, err := os.OpenFile(testFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec
+	if err != nil {
+		return fmt.Errorf("directory not writable: %s: %v", dir, err)
+	}
+	// Clean up: close and remove test file
+	f.Close()           //nolint:gosec,errcheck
+	os.Remove(testFile) //nolint:gosec,errcheck
 
 	return nil
 }

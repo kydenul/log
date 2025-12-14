@@ -1,6 +1,9 @@
 package log
 
 import (
+	"bufio"
+	"errors"
+	"net"
 	"net/http"
 	"time"
 )
@@ -82,4 +85,38 @@ func (rw *responseWriter) Write(data []byte) (int, error) {
 // Header returns the header map that will be sent by WriteHeader.
 func (rw *responseWriter) Header() http.Header {
 	return rw.ResponseWriter.Header()
+}
+
+// Flush implements the http.Flusher interface.
+// It delegates to the underlying ResponseWriter if it supports flushing.
+// This is essential for streaming responses (SSE, chunked transfer, etc.).
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack implements the http.Hijacker interface.
+// It delegates to the underlying ResponseWriter if it supports hijacking.
+// This is essential for WebSocket connections and HTTP upgrades.
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := rw.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, errors.New("hijacking not supported by underlying ResponseWriter")
+}
+
+// Push implements the http.Pusher interface for HTTP/2 server push.
+// It delegates to the underlying ResponseWriter if it supports push.
+func (rw *responseWriter) Push(target string, opts *http.PushOptions) error {
+	if p, ok := rw.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return errors.New("push not supported by underlying ResponseWriter")
+}
+
+// Unwrap returns the underlying ResponseWriter.
+// This allows middleware chains to access the original ResponseWriter.
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
 }

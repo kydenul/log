@@ -12,10 +12,13 @@ import (
 )
 
 // DefaultDirectory returns the default log directory, which is typically the user's home directory joined with "logs".
+// Falls back to temp directory if home directory cannot be determined.
 var DefaultDirectory = func() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		panic(fmt.Sprintf("Failed to get user home directory: %v", err))
+		// Fallback to temp directory if home directory is not available
+		// This can happen in containers, certain service accounts, etc.
+		return filepath.Join(os.TempDir(), "logs")
 	}
 	return filepath.Join(home, "logs")
 }()

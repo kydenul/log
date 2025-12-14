@@ -29,9 +29,10 @@ func NewBaseEncoder(format, timeLayout string) zapcore.Encoder {
 }
 
 // SetupAutoSync sets up automatic synchronization of logs.
-func SetupAutoSync(syncFunc func()) {
+// It registers signal handlers to flush logs before the application terminates.
+func SetupAutoSync(syncFunc func() error) {
 	autoSyncSetup.Do(func() {
-		// Create signal channel
+		// Create signal channel with buffer size 1
 		signalChan := make(chan os.Signal, 1)
 
 		// Register signals to capture
@@ -39,18 +40,28 @@ func SetupAutoSync(syncFunc func()) {
 
 		// Start a goroutine to handle signals
 		go func() {
-			<-signalChan
+			sig := <-signalChan
 
 			// Call Sync() function when signal received
-			fmt.Println("Received termination signal, flushing logs...")
+			fmt.Fprintf(os.Stderr, "Received termination signal (%v), flushing logs...\n", sig)
 			syncFunc()
 
-			// Stop signal channel
+			// Stop receiving signals on this channel
 			signal.Stop(signalChan)
+			close(signalChan)
 
-			// Send signal to default signal handler
-			p, _ := os.FindProcess(os.Getpid())
-			_ = p.Signal(syscall.SIGTERM)
+			// Exit cleanly after flushing logs
+			// Use exit code 0 for SIGHUP (reload), 130 for SIGINT (Ctrl+C), 143 for SIGTERM
+			switch sig {
+			case syscall.SIGHUP:
+				os.Exit(0)
+			case syscall.SIGINT:
+				os.Exit(130) // 128 + 2 (SIGINT)
+			case syscall.SIGTERM:
+				os.Exit(143) // 128 + 15 (SIGTERM)
+			default:
+				os.Exit(1)
+			}
 		}()
 	})
 }

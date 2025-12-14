@@ -27,7 +27,7 @@ func newMockLogger() *mockLogger {
 	return &mockLogger{logs: make([]logEntry, 0)}
 }
 
-func (m *mockLogger) Sync() {}
+func (m *mockLogger) Sync() error { return nil }
 
 func (m *mockLogger) Debug(args ...any) {
 	m.logs = append(m.logs, logEntry{level: "debug", message: "", fields: args})

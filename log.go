@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,8 +35,6 @@ func (discardWriter) Write(p []byte) (int, error) {
 var (
 	// Global logger instance using atomic.Value for lock-free access
 	defaultLogger atomic.Value // *ZiwiLog
-	// Log prefix
-	logPrefix string
 
 	// Buffer pool to reduce memory allocations
 	bufferPool = sync.Pool{
@@ -89,6 +88,7 @@ type Log struct {
 	currDate  string // current date
 	dateCheck int64  // atomic timestamp for date checking optimization
 	opts      *Options
+	prefix    string       // instance-specific log prefix (thread-safe per instance)
 	mu        sync.RWMutex // protects file operations
 }
 
@@ -126,10 +126,7 @@ func NewLog(opts *Options) *Log {
 		}
 	}
 
-	// 3. Set log prefix
-	logPrefix = opts.Prefix
-
-	// 4. Set time layout, Default time layout
+	// 3. Set time layout, Default time layout
 	timeLayout := DefaultTimeLayout
 	if err := internal.ValidateTimeLayout(opts.TimeLayout); err == nil {
 		timeLayout = opts.TimeLayout
@@ -138,15 +135,16 @@ func NewLog(opts *Options) *Log {
 			"Invalid time layout '%s', using default: %s\n", opts.TimeLayout, DefaultTimeLayout)
 	}
 
-	// 5. Create our custom ZiwiLog with the base encoder
+	// 4. Create our custom ZiwiLog with the base encoder
 	logger := &Log{
 		Encoder:   internal.NewBaseEncoder(opts.Format, timeLayout),
 		opts:      opts,
 		logDir:    opts.Directory,
 		dateCheck: time.Now().Unix(),
+		prefix:    opts.Prefix, // Store prefix in instance (thread-safe)
 	}
 
-	// 6. Create the zap logger with our custom core, ZiwiLog encoder
+	// 5. Create the zap logger with our custom core, ZiwiLog encoder
 	zapLevel := DefaultLevel
 	_ = zapLevel.UnmarshalText([]byte(opts.Level))
 
@@ -181,11 +179,11 @@ func NewLog(opts *Options) *Log {
 		zap.WithCaller(!opts.DisableCaller),
 	)
 
-	// 7. Assign the zap logger to our ZiwiLog
+	// 6. Assign the zap logger to our ZiwiLog
 	logger.log = log
 	zap.RedirectStdLog(logger.log)
 
-	// 8. Set this logger as the global default logger
+	// 7. Set this logger as the global default logger
 	// This enables both logger.Info() and log.Info() usage patterns
 	ReplaceLogger(logger)
 
@@ -215,14 +213,15 @@ func (l *Log) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.
 	}
 
 	// Optimize prefix addition using buffer operations instead of string concatenation
-	if logPrefix != "" {
+	// Use instance-specific prefix (thread-safe, no data race)
+	if l.prefix != "" {
 		// Get a temporary buffer from pool for prefix operation
 		tempBuf, _ := bufferPool.Get().(*buffer.Buffer)
 		tempBuf.Reset()
 		defer bufferPool.Put(tempBuf)
 
 		// Write prefix + original content efficiently
-		tempBuf.AppendString(logPrefix)
+		tempBuf.AppendString(l.prefix)
 		_, _ = tempBuf.Write(buf.Bytes())
 
 		// Replace original buffer content
@@ -252,9 +251,17 @@ func (l *Log) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.
 
 	// Write to main log file with error handling
 	data := buf.Bytes()
-	if err := l.writeToFile(l.file, data); err != nil {
-		// Log write errors to stderr as fallback
-		fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
+
+	// Get file reference while holding lock to avoid race condition
+	l.mu.RLock()
+	mainFile := l.file
+	l.mu.RUnlock()
+
+	if mainFile != nil {
+		if err := l.writeToFile(mainFile, data); err != nil {
+			// Log write errors to stderr as fallback
+			fmt.Fprintf(os.Stderr, "Failed to write to log file: %v\n", err)
+		}
 	}
 
 	// For error level logs, also write to error log file
@@ -455,23 +462,57 @@ func (l *Log) setupLogFiles(date string) error {
 	return nil
 }
 
-// Sync flushs any buffered log entries. Applications should take care to call Sync before exiting.
-func Sync() { DefaultLogger().Sync() }
+// Sync flushes any buffered log entries. Applications should take care to call Sync before exiting.
+// Returns an error if any sync or close operation fails.
+func Sync() error { return DefaultLogger().Sync() }
 
-// Sync flushs any buffered log entries. Applications should take care to call Sync before exiting.
-func (l *Log) Sync() {
-	_ = l.log.Sync()
+// Sync flushes any buffered log entries. Applications should take care to call Sync before exiting.
+// Returns an error if any sync or close operation fails.
+func (l *Log) Sync() error {
+	var errs []error
+
+	if err := l.log.Sync(); err != nil {
+		// Ignore sync errors for stdout/stderr (common on some platforms)
+		if !isStdoutSyncError(err) {
+			errs = append(errs, fmt.Errorf("failed to sync zap logger: %w", err))
+		}
+	}
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if l.file != nil {
-		_ = l.file.Close()
+		if err := l.file.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close main log file: %w", err))
+		}
+		// Note: Do NOT set l.file = nil here to maintain compatibility with
+		// concurrent EncodeEntry calls. The file will be recreated on next write.
 	}
 
 	if l.errFile != nil {
-		_ = l.errFile.Close()
+		if err := l.errFile.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close error log file: %w", err))
+		}
+		// Note: Do NOT set l.errFile = nil here to maintain compatibility with
+		// concurrent EncodeEntry calls.
 	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("sync errors: %v", errs)
+	}
+	return nil
+}
+
+// isStdoutSyncError checks if the error is a sync error for stdout/stderr
+// which is expected on some platforms and can be safely ignored.
+func isStdoutSyncError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// On some platforms, syncing stdout/stderr returns "invalid argument" or "bad file descriptor"
+	errStr := err.Error()
+	return strings.Contains(errStr, "invalid argument") ||
+		strings.Contains(errStr, "bad file descriptor")
 }
 
 func Debug(args ...any) { DefaultLogger().log.Sugar().Debug(args...) }

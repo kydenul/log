@@ -15,7 +15,7 @@ type mockLogger struct {
 	fields   []map[string]any
 }
 
-func (m *mockLogger) Sync() {}
+func (m *mockLogger) Sync() error { return nil }
 
 func (m *mockLogger) Debug(args ...any) {}
 

@@ -207,8 +207,8 @@ type requestIDLogger struct {
 	requestID any
 }
 
-func (r *requestIDLogger) Sync() {
-	r.logger.Sync()
+func (r *requestIDLogger) Sync() error {
+	return r.logger.Sync()
 }
 
 func (r *requestIDLogger) Debug(args ...any) {

@@ -9,7 +9,7 @@ package log
 //   - methods ending in "f" for log.Printf-style logging
 //   - methods ending in "ln" for log.Println-style logging
 type Logger interface {
-	Sync()
+	Sync() error
 
 	Debug(args ...any)
 	Debugf(template string, args ...any)
