@@ -3752,3 +3752,207 @@ func TestConsoleOutput_FileWritingBehavior(t *testing.T) {
 	asrt.True(logger1.opts.ConsoleOutput, "Logger1 should have console output enabled")
 	asrt.False(logger2.opts.ConsoleOutput, "Logger2 should have console output disabled")
 }
+
+// ============================================================================
+// Nested Configuration Tests (KLOG key support)
+// ============================================================================
+
+func TestLoadFromFile_NestedKLOGConfig(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+
+	// Test YAML with nested KLOG configuration
+	t.Run("YAML with KLOG key", func(t *testing.T) {
+		yamlFile := filepath.Join(tempDir, "klog_config.yaml")
+		yamlContent := `
+KLOG:
+  prefix: "NESTED_"
+  level: "debug"
+  format: "json"
+  directory: "` + tempDir + `"
+  max_size: 50
+  max_backups: 2
+  console_output: false
+`
+		err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644)
+		require.NoError(t, err)
+
+		opts, err := LoadFromFile(yamlFile)
+		asrt.NoError(err)
+		asrt.NotNil(opts)
+		asrt.Equal("NESTED_", opts.Prefix)
+		asrt.Equal("debug", opts.Level)
+		asrt.Equal("json", opts.Format)
+		asrt.Equal(tempDir, opts.Directory)
+		asrt.Equal(50, opts.MaxSize)
+		asrt.Equal(2, opts.MaxBackups)
+		asrt.False(opts.ConsoleOutput)
+	})
+
+	// Test JSON with nested KLOG configuration
+	t.Run("JSON with KLOG key", func(t *testing.T) {
+		jsonFile := filepath.Join(tempDir, "klog_config.json")
+		jsonContent := `{
+  "KLOG": {
+    "prefix": "JSON_NESTED_",
+    "level": "warn",
+    "format": "console",
+    "directory": "` + tempDir + `",
+    "max_size": 100
+  }
+}`
+		err := os.WriteFile(jsonFile, []byte(jsonContent), 0o644)
+		require.NoError(t, err)
+
+		opts, err := LoadFromFile(jsonFile)
+		asrt.NoError(err)
+		asrt.NotNil(opts)
+		asrt.Equal("JSON_NESTED_", opts.Prefix)
+		asrt.Equal("warn", opts.Level)
+		asrt.Equal("console", opts.Format)
+		asrt.Equal(100, opts.MaxSize)
+	})
+
+	// Test TOML with nested KLOG configuration
+	t.Run("TOML with KLOG key", func(t *testing.T) {
+		tomlFile := filepath.Join(tempDir, "klog_config.toml")
+		tomlContent := `[KLOG]
+prefix = "TOML_NESTED_"
+level = "error"
+format = "json"
+directory = "` + tempDir + `"
+max_size = 75
+compress = true
+`
+		err := os.WriteFile(tomlFile, []byte(tomlContent), 0o644)
+		require.NoError(t, err)
+
+		opts, err := LoadFromFile(tomlFile)
+		asrt.NoError(err)
+		asrt.NotNil(opts)
+		asrt.Equal("TOML_NESTED_", opts.Prefix)
+		asrt.Equal("error", opts.Level)
+		asrt.Equal("json", opts.Format)
+		asrt.Equal(75, opts.MaxSize)
+		asrt.True(opts.Compress)
+	})
+}
+
+func TestLoadFromFile_DirectConfigVsNestedConfig(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+
+	// Test direct configuration (no KLOG key)
+	t.Run("Direct configuration", func(t *testing.T) {
+		directFile := filepath.Join(tempDir, "direct_config.yaml")
+		directContent := `
+prefix: "DIRECT_"
+level: "info"
+format: "console"
+`
+		err := os.WriteFile(directFile, []byte(directContent), 0o644)
+		require.NoError(t, err)
+
+		opts, err := LoadFromFile(directFile)
+		asrt.NoError(err)
+		asrt.NotNil(opts)
+		asrt.Equal("DIRECT_", opts.Prefix)
+		asrt.Equal("info", opts.Level)
+		asrt.Equal("console", opts.Format)
+	})
+
+	// Test nested configuration (with KLOG key)
+	t.Run("Nested configuration", func(t *testing.T) {
+		nestedFile := filepath.Join(tempDir, "nested_config.yaml")
+		nestedContent := `
+KLOG:
+  prefix: "NESTED_"
+  level: "debug"
+  format: "json"
+`
+		err := os.WriteFile(nestedFile, []byte(nestedContent), 0o644)
+		require.NoError(t, err)
+
+		opts, err := LoadFromFile(nestedFile)
+		asrt.NoError(err)
+		asrt.NotNil(opts)
+		asrt.Equal("NESTED_", opts.Prefix)
+		asrt.Equal("debug", opts.Level)
+		asrt.Equal("json", opts.Format)
+	})
+
+	// Test that KLOG key takes precedence when both exist
+	t.Run("KLOG takes precedence over root level", func(t *testing.T) {
+		mixedFile := filepath.Join(tempDir, "mixed_config.yaml")
+		mixedContent := `
+prefix: "ROOT_"
+level: "error"
+KLOG:
+  prefix: "KLOG_"
+  level: "debug"
+`
+		err := os.WriteFile(mixedFile, []byte(mixedContent), 0o644)
+		require.NoError(t, err)
+
+		opts, err := LoadFromFile(mixedFile)
+		asrt.NoError(err)
+		asrt.NotNil(opts)
+		// KLOG configuration should be used
+		asrt.Equal("KLOG_", opts.Prefix)
+		asrt.Equal("debug", opts.Level)
+	})
+}
+
+func TestFromConfigFile_NestedKLOGConfig(t *testing.T) {
+	t.Parallel()
+	asrt := assert.New(t)
+
+	tempDir := t.TempDir()
+
+	// Test FromConfigFile with nested KLOG configuration
+	configFile := filepath.Join(tempDir, "logger_klog_config.yaml")
+	configContent := `
+KLOG:
+  prefix: "LOGGER_NESTED_"
+  level: "warn"
+  format: "json"
+  directory: "` + tempDir + `"
+  filename: "klog_test"
+  max_size: 25
+  max_backups: 1
+  disable_caller: true
+  disable_split_error: true
+  console_output: false
+`
+	err := os.WriteFile(configFile, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	logger, err := FromConfigFile(configFile)
+	asrt.NoError(err)
+	asrt.NotNil(logger)
+
+	// Verify logger configuration
+	asrt.Equal("LOGGER_NESTED_", logger.opts.Prefix)
+	asrt.Equal("warn", logger.opts.Level)
+	asrt.Equal("json", logger.opts.Format)
+	asrt.Equal(tempDir, logger.opts.Directory)
+	asrt.Equal("klog_test", logger.opts.Filename)
+	asrt.Equal(25, logger.opts.MaxSize)
+	asrt.Equal(1, logger.opts.MaxBackups)
+	asrt.True(logger.opts.DisableCaller)
+	asrt.True(logger.opts.DisableSplitError)
+	asrt.False(logger.opts.ConsoleOutput)
+
+	// Test logging
+	logger.Warn("Test warning from nested KLOG config")
+	logger.Sync()
+}
+
+func TestConfigKeyConstant(t *testing.T) {
+	// Verify the ConfigKey constant value
+	assert.Equal(t, "KLOG", ConfigKey)
+}

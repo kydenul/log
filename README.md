@@ -143,94 +143,100 @@ The logging library uses [Viper](https://github.com/spf13/viper) for configurati
 
 All formats support the same configuration options with automatic conversion between formats.
 
-### Configuration from Files
+### Configuration File Formats
 
-Load configuration from multiple file formats (YAML, JSON, TOML):
+The library supports two configuration formats:
 
-```go
-// Load from YAML file
-logger, err := log.FromConfigFile("config.yaml")
-if err != nil {
-    log.Fatal("Failed to load config:", err)
-}
-logger.Info("Logger configured from YAML file")
+1. **Nested configuration with `KLOG` key (Recommended)** - Configuration under a `KLOG` top-level key
+2. **Direct configuration** - Configuration at the root level
 
-// Load from JSON file
-logger, err = log.FromConfigFile("config.json")
-if err != nil {
-    log.Fatal("Failed to load config:", err)
-}
-logger.Info("Logger configured from JSON file")
+> **Recommendation**: Use the `KLOG` nested configuration format. This approach allows you to combine logger configuration with other application settings in a single file, keeping your configuration organized and avoiding key conflicts.
 
-// Load from TOML file
-logger, err = log.FromConfigFile("config.toml")
-if err != nil {
-    log.Fatal("Failed to load config:", err)
-}
-logger.Info("Logger configured from TOML file")
-```
-
-Example configurations in different formats:
+#### Nested Configuration with `KLOG` Key (Recommended)
 
 **YAML configuration (config.yaml):**
 
 ```yaml
-# config.yaml
-prefix: "MYAPP"
-directory: "./logs"
-filename: "app"
-level: "info"
-format: "json"
-time-layout: "2006-01-02 15:04:05.000"
+# config.yaml - Recommended format with KLOG key
+# This allows combining with other application settings
 
-# Basic settings
-disable-caller: false
-disable-stacktrace: false
-disable-split-error: false
+# Other application settings can coexist
+app:
+  name: "my-service"
+  port: 8080
 
-# File rotation
-max-size: 100
-max-backups: 5
-compress: true
+# Logger configuration under KLOG key
+KLOG:
+  prefix: "ZIWI_"
+  directory: "./logs"
+  filename: "ziwi"
+  level: "info"
+  format: "json"
+  time_layout: "2006-01-02 15:04:05.000"
 
-# Console output control
-console-output: true
+  # Basic settings
+  disable_caller: false
+  disable_stacktrace: false
+  disable_split_error: false
 
-# Sampling (reduces log volume in high-traffic scenarios)
-enable-sampling: true
-sample-initial: 100
-sample-thereafter: 1000
+  # File rotation
+  max_size: 100
+  max_backups: 5
+  compress: true
+
+  # Console output control
+  console_output: true
+
+  # Sampling (reduces log volume in high-traffic scenarios)
+  enable_sampling: true
+  sample_initial: 100
+  sample_thereafter: 1000
 ```
 
 **JSON configuration (config.json):**
 
 ```json
 {
-  "prefix": "MYAPP",
-  "directory": "./logs",
-  "filename": "app",
-  "level": "info",
-  "format": "json",
-  "time_layout": "2006-01-02 15:04:05.000",
-  "disable_caller": false,
-  "disable_stacktrace": false,
-  "disable_split_error": false,
-  "max_size": 100,
-  "max_backups": 5,
-  "compress": true,
-  "console_output": true,
-  "enable_sampling": true,
-  "sample_initial": 100,
-  "sample_thereafter": 1000
+  "app": {
+    "name": "my-service",
+    "port": 8080
+  },
+  "KLOG": {
+    "prefix": "ZIWI_",
+    "directory": "./logs",
+    "filename": ziwi",
+    "level": "info",
+    "format": "json",
+    "time_layout": "2006-01-02 15:04:05.000",
+    "disable_caller": false,
+    "disable_stacktrace": false,
+    "disable_split_error": false,
+    "max_size": 100,
+    "max_backups": 5,
+    "compress": true,
+    "console_output": true,
+    "enable_sampling": true,
+    "sample_initial": 100,
+    "sample_thereafter": 1000
+  }
 }
 ```
 
 **TOML configuration (config.toml):**
 
 ```toml
-prefix = "MYAPP"
+# config.toml - Recommended format with KLOG section
+
+# Other application settings
+[app]
+name = "my-service"
+port = 8080
+
+# Logger configuration
+[KLOG]
+prefix = "ZIWI_"
 directory = "./logs"
-filename = "app"
+filename = "ziwi"
 level = "info"
 format = "json"
 time_layout = "2006-01-02 15:04:05.000"
@@ -248,11 +254,66 @@ compress = true
 # Console output control
 console_output = true
 
-# Sampling (reduces log volume in high-traffic scenarios)
+# Sampling
 enable_sampling = true
 sample_initial = 100
 sample_thereafter = 1000
 ```
+
+#### Direct Configuration (Alternative)
+
+If you prefer a dedicated configuration file for logging only, you can use direct configuration without the `KLOG` key:
+
+**YAML configuration (log-config.yaml):**
+
+```yaml
+# log-config.yaml - Direct configuration (no KLOG key)
+prefix: "ZIWI_"
+directory: "./logs"
+filename: "ziwi"
+level: "info"
+format: "json"
+time_layout: "2006-01-02 15:04:05.000"
+
+# Basic settings
+disable_caller: false
+disable_stacktrace: false
+disable_split_error: false
+
+# File rotation
+max_size: 100
+max_backups: 5
+compress: true
+
+# Console output control
+console_output: true
+
+# Sampling
+enable_sampling: true
+sample_initial: 100
+sample_thereafter: 1000
+```
+
+### Configuration Options Reference
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `prefix` | string | `"ZIWI_"` | Log message prefix |
+| `directory` | string | `$HOME/logs` | Log file directory |
+| `filename` | string | `""` | Log filename prefix (e.g., `app` -> `app-2024-01-15.log`) |
+| `level` | string | `"info"` | Log level: `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal` |
+| `format` | string | `"console"` | Output format: `console` or `json` |
+| `time_layout` | string | `"2006-01-02 15:04:05.000"` | Time format layout |
+| `disable_caller` | bool | `false` | Disable caller information |
+| `disable_stacktrace` | bool | `false` | Disable stack traces |
+| `disable_split_error` | bool | `true` | Disable separate error log files |
+| `max_size` | int | `100` | Maximum log file size in MB |
+| `max_backups` | int | `3` | Maximum number of old log files to retain |
+| `compress` | bool | `false` | Compress rotated log files |
+| `console_output` | bool | `true` | Enable console output |
+| `enable_sampling` | bool | `false` | Enable log sampling |
+| `sample_initial` | int | `100` | Initial sample count per second |
+| `sample_thereafter` | int | `100` | Sample count after initial burst |
 
 ### Advanced Configuration
 
@@ -565,10 +626,10 @@ devLogger := log.NewBuilder().
 
 ```yaml
 # Enable console output (default)
-console-output: true
+console_output: true
 
 # Disable console output (production)
-console-output: false
+console_output: false
 ```
 
 ```json
@@ -755,58 +816,6 @@ func processData(logger *log.Log) {
 }
 ```
 
-### Testing with Logging
-
-```go
-package main
-
-import (
-    "testing"
-    "github.com/kydenul/log"
-    "github.com/kydenul/log/logutil"
-)
-
-func TestDataProcessing(t *testing.T) {
-    // Use testing preset for clean output
-    logger := log.WithPreset(log.TestingPreset())
-    
-    // Test with logging
-    logutil.InfoIf(logger, testing.Verbose(), "Starting data processing test")
-    
-    result := processTestData(logger)
-    
-    if result == nil {
-        t.Error("Expected result, got nil")
-    }
-    
-    logutil.InfoIf(logger, testing.Verbose(), "Test completed", "result", result)
-}
-```
-
-## Error Handling and Validation
-
-The library provides robust error handling and validation:
-
-```go
-// Configuration validation with automatic fixes
-opts := log.NewOptions().WithLevel("invalid_level") // Will use default level
-logger := log.NewLog(opts) // Logs warning but continues with safe defaults
-
-// File operation error handling
-logger := log.NewBuilder().
-    Directory("/invalid/path").  // Will fall back to default directory
-    Filename("invalid<>name").   // Will sanitize or fall back to default
-    Build()
-
-// Multi-format configuration with detailed error messages
-logger, err := log.FromConfigFile("config.yaml") // Also supports .json, .toml
-if err != nil {
-    // Error includes specific guidance on what went wrong
-    log.Printf("Config error: %v", err)
-    logger = log.Quick() // Fall back to quick setup
-}
-```
-
 ## Best Practices
 
 1. **Choose your calling mode consistently**:
@@ -836,35 +845,6 @@ if err != nil {
 10. **Always call Sync()**: Call `logger.Sync()` or `log.Sync()` before application exit to flush buffers
 
 11. **Understand global logger behavior**: When creating multiple loggers, the most recent one becomes the global default. Use `log.ReplaceLogger()` if you need explicit control
-
-## Recent Updates
-
-### Dual Calling Modes (Latest)
-
-The logging library now supports **dual calling modes** for maximum flexibility:
-
-- **Seamless integration**: Use both `logger.Info()` and `log.Info()` with the same configuration
-- **Automatic global logger**: Any logger creation method automatically updates the global default
-- **Zero migration effort**: Existing code continues to work without changes
-- **Flexible usage**: Choose the calling style that fits your code structure
-- **Consistent output**: Both calling modes produce identical logs with the same formatting
-
-**Benefits**:
-
-- **Team flexibility**: Different developers can use their preferred calling style
-- **Library compatibility**: Easy integration with existing libraries expecting global functions
-- **Migration friendly**: Smooth transition from other logging libraries
-
-### Configuration Enhancement
-
-The logging library has been enhanced with **Viper integration** for improved configuration management:
-
-- **Multi-format support**: Now supports YAML, JSON, TOML, and other formats
-- **Backward compatibility**: All existing YAML configurations continue to work
-- **Enhanced validation**: Better error messages and configuration validation
-- **Future extensibility**: Foundation for environment variables and hot-reloading
-
-**Migration**: No changes required for existing YAML configurations. New formats are automatically supported based on file extension.
 
 ## Requirements
 

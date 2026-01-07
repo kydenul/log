@@ -812,9 +812,40 @@ func LoadFromJSON(jsonPath string) (*Options, error) { return LoadFromFile(jsonP
 // parsing and validation. For multi-format support, use LoadFromFile directly.
 func LoadFromTOML(tomlPath string) (*Options, error) { return LoadFromFile(tomlPath) }
 
+// ConfigKey is the optional top-level key for nested configuration.
+// When present in the config file, options will be read from under this key.
+// Both formats are supported:
+//
+// Format 1 - Direct configuration (no top-level key):
+//
+//	prefix: "ZIWI_"
+//	level: "info"
+//
+// Format 2 - Nested configuration (with KLOG key):
+//
+//	KLOG:
+//	  prefix: "ZIWI_"
+//	  level: "info"
+const ConfigKey = "KLOG"
+
 // LoadFromFile loads configuration from multiple file formats using Viper.
 // This function automatically detects the file format based on the file extension
 // and supports YAML, JSON, TOML, and other formats supported by Viper.
+//
+// The function supports two configuration formats:
+//
+// Format 1 - Direct configuration (fields at root level):
+//
+//	prefix: "ZIWI_"
+//	level: "info"
+//	directory: "/var/log/myapp"
+//
+// Format 2 - Nested configuration (fields under KLOG key):
+//
+//	KLOG:
+//	  prefix: "ZIWI_"
+//	  level: "info"
+//	  directory: "/var/log/myapp"
 //
 // Parameters:
 //   - configPath: Path to the configuration file
@@ -873,14 +904,29 @@ func LoadFromFile(configPath string) (*Options, error) {
 		)
 	}
 
-	// Unmarshal the configuration into Options struct
-	if err := v.Unmarshal(opts); err != nil {
-		return nil, fmt.Errorf(
-			"failed to parse configuration from %s: %w. "+
-				"Please check your configuration syntax and ensure all field names match the expected configuration options",
-			configPath,
-			err,
-		)
+	// Check if the KLOG key exists in the configuration
+	// If it does, use the nested configuration; otherwise, use root-level configuration
+	if v.IsSet(ConfigKey) {
+		// Nested configuration format: KLOG: { prefix: ..., level: ... }
+		if err := v.UnmarshalKey(ConfigKey, opts); err != nil {
+			return nil, fmt.Errorf(
+				"failed to parse configuration from %s under key '%s': %w. "+
+					"Please check your configuration syntax and ensure all field names match the expected configuration options",
+				configPath,
+				ConfigKey,
+				err,
+			)
+		}
+	} else {
+		// Direct configuration format: prefix: ..., level: ...
+		if err := v.Unmarshal(opts); err != nil {
+			return nil, fmt.Errorf(
+				"failed to parse configuration from %s: %w. "+
+					"Please check your configuration syntax and ensure all field names match the expected configuration options",
+				configPath,
+				err,
+			)
+		}
 	}
 
 	// Validate the loaded configuration
